@@ -574,6 +574,32 @@ app.post('/api/jessica-chat-image', async (req, res) => {
   }
 });
 
+// Google OAuth callback endpoint
+app.get('/auth/google/callback', (req, res) => {
+  console.log('[Google OAuth] Callback received:', req.query);
+  
+  // Extract the authorization code from the query parameters
+  const { code, state } = req.query;
+  
+  if (!code) {
+    console.error('[Google OAuth] No authorization code received');
+    return res.status(400).json({ error: 'No authorization code received' });
+  }
+  
+  // For now, just log the code and return success
+  // In a full implementation, you would exchange this code for tokens
+  console.log('[Google OAuth] Authorization code received:', code);
+  
+  // Return a simple success response
+  // In a real app, you might redirect to your app or return tokens
+  res.json({
+    success: true,
+    message: 'Google OAuth callback received successfully',
+    code: code,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Example: Add more endpoints here for other backend needs
 
 const PORT = process.env.PORT || 5001;
