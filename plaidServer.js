@@ -348,40 +348,65 @@ app.post('/api/jessica-chat-message', async (req, res) => {
 });
 
 app.post('/api/jessica-chat-image', async (req, res) => {
+  const { message, imageUrl, userId, userData } = req.body;
   console.log('[Jessica] Received image message');
   console.log(`[Jessica] OpenAI available: ${!!openai}, API Key: ${!!process.env.OPENAI_API_KEY}`);
   
   try {
     let response;
+    const lowerMessage = message.toLowerCase();
     
     if (openai && process.env.OPENAI_API_KEY) {
       console.log('[Jessica] Using OpenAI for image analysis');
       try {
-        // Use OpenAI for image analysis
+        // Enhanced system prompt for business-focused image analysis
+        const systemPrompt = `You are Jessica, an AI assistant for a 1099 contractor management app. 
+        
+        Analyze the image and provide business-focused insights. Focus on:
+        
+        **Receipts & Expenses:**
+        - Extract business expense details (amount, date, vendor, items)
+        - Identify if it's a valid business expense
+        - Suggest appropriate expense categories
+        - Note if it's tax-deductible
+        
+        **Mileage & Travel:**
+        - Identify if it's a mileage log, odometer reading, or travel-related
+        - Extract distance, dates, locations if visible
+        - Suggest business vs personal classification
+        
+        **Business Documents:**
+        - Analyze contracts, invoices, business cards
+        - Extract contact information, amounts, dates
+        - Identify business opportunities or leads
+        
+        **Office/Work Environment:**
+        - Identify business equipment, supplies, workspace
+        - Suggest productivity improvements
+        - Note potential business deductions
+        
+        **General Business:**
+        - If not business-related, politely redirect to business topics
+        - Provide helpful business advice when appropriate
+        
+        Be specific, actionable, and business-focused. If you can extract data, format it clearly.`;
+        
         const completion = await openai.chat.completions.create({
           model: "gpt-4o",
           messages: [
             {
               role: "system",
-              content: `You are Jessica, an AI assistant for a 1099 contractor management app. 
-              Analyze the image the user has shared and provide helpful insights related to:
-              - Business expenses and receipts
-              - Mileage tracking
-              - Tax deductions
-              - Business organization
-              - Productivity tips
-              
-              Be helpful and professional. If the image isn't business-related, politely redirect to business topics.`
+              content: systemPrompt
             },
             {
               role: "user",
               content: [
-                { type: "text", text: "Please analyze this image and provide business-related insights:" },
-                { type: "image_url", image_url: { url: req.body.imageUrl } }
+                { type: "text", text: `Please analyze this image and provide business insights. User message: "${message}"` },
+                { type: "image_url", image_url: { url: imageUrl } }
               ]
             }
           ],
-          max_tokens: 500,
+          max_tokens: 800,
           temperature: 0.7,
         });
         
@@ -392,15 +417,26 @@ app.post('/api/jessica-chat-image', async (req, res) => {
         response = "I can see the image you've shared. I'm still learning to process images, but I can help you with text-based questions about business management, expenses, and tax deductions!";
       }
     } else {
-      console.log('[Jessica] Using fallback response for image (no OpenAI)');
-      // Fallback response if OpenAI is not configured
-      response = "I can see the image you've shared. I'm still learning to process images, but I can help you with text-based questions about business management, expenses, and tax deductions!";
+      console.log('[Jessica] Using enhanced fallback response for image (no OpenAI)');
+      
+      // Enhanced fallback responses based on message keywords
+      if (lowerMessage.includes('receipt') || lowerMessage.includes('expense') || lowerMessage.includes('bill')) {
+        response = "I can see you've shared what looks like a receipt or expense document. While I can't analyze the image details without advanced AI, I can help you log this expense! Just tell me the amount and description, like 'Add $25 expense for office supplies' or 'Log $50 for gas receipt'.";
+      } else if (lowerMessage.includes('mileage') || lowerMessage.includes('odometer') || lowerMessage.includes('trip')) {
+        response = "I can see you've shared what looks like a mileage or travel-related image. While I can't read the specific details, I can help you log this mileage! Just tell me the distance and purpose, like 'Add 15 miles for client meeting' or 'Log 25 miles business trip'.";
+      } else if (lowerMessage.includes('business card') || lowerMessage.includes('contact') || lowerMessage.includes('lead')) {
+        response = "I can see you've shared what looks like a business card or contact information. While I can't read the specific details, I can help you add this as a lead! Just tell me the name and company, like 'Add lead John Smith from ABC Corp' or 'Add client Jane Doe'.";
+      } else if (lowerMessage.includes('office') || lowerMessage.includes('workspace') || lowerMessage.includes('equipment')) {
+        response = "I can see you've shared what looks like an office or workspace image. This could be relevant for business deductions! Consider tracking expenses for office supplies, equipment, or workspace improvements. I can help you log these as business expenses.";
+      } else {
+        response = "I can see the image you've shared. While I can't analyze the specific details without advanced AI, I can help you with business-related tasks! Try saying things like:\n• 'Add $50 expense for gas'\n• 'Log 15 miles for client meeting'\n• 'Add lead John Smith'\n• 'What are my business expenses?'";
+      }
     }
     
     // Simulate processing time
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    console.log(`[Jessica] Sending image response: ${response.substring(0, 50)}...`);
+    console.log(`[Jessica] Sending image response: ${response.substring(0, 100)}...`);
     res.json({
       response: response,
       timestamp: new Date().toISOString()
