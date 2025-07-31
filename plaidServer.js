@@ -265,20 +265,29 @@ app.post('/api/jessica-chat-message', async (req, res) => {
         let subInputType = '';
         let mainInputType = '';
         
-        if (lowerMessage.includes('appointment') && lowerMessage.includes('set')) {
-          mainInputType = 'appointments';
-          if (lowerMessage.includes('door')) subInputType = 'appointmentsSetDoorKnocks';
-          else if (lowerMessage.includes('tag')) subInputType = 'appointmentsSetTagsPut';
-          else if (lowerMessage.includes('call')) subInputType = 'appointmentsSetCallsMade';
-          else if (lowerMessage.includes('referral')) subInputType = 'appointmentsSetReferrals';
-          else if (lowerMessage.includes('inbound')) subInputType = 'appointmentsSetInbound';
-        } else if (lowerMessage.includes('appointment') && lowerMessage.includes('held')) {
+        // Check for "appointments held" first to avoid confusion with "appointments"
+        if (lowerMessage.includes('appointment') && lowerMessage.includes('held')) {
           mainInputType = 'appointmentHolds';
           if (lowerMessage.includes('door')) subInputType = 'appointmentsHeldDoorKnocks';
           else if (lowerMessage.includes('tag')) subInputType = 'appointmentsHeldTagsPut';
           else if (lowerMessage.includes('call')) subInputType = 'appointmentsHeldCallsMade';
           else if (lowerMessage.includes('referral')) subInputType = 'appointmentsHeldReferrals';
           else if (lowerMessage.includes('inbound')) subInputType = 'appointmentsHeldInbound';
+        } else if (lowerMessage.includes('appointment') && lowerMessage.includes('set')) {
+          mainInputType = 'appointments';
+          if (lowerMessage.includes('door')) subInputType = 'appointmentsSetDoorKnocks';
+          else if (lowerMessage.includes('tag')) subInputType = 'appointmentsSetTagsPut';
+          else if (lowerMessage.includes('call')) subInputType = 'appointmentsSetCallsMade';
+          else if (lowerMessage.includes('referral')) subInputType = 'appointmentsSetReferrals';
+          else if (lowerMessage.includes('inbound')) subInputType = 'appointmentsSetInbound';
+        } else if (lowerMessage.includes('appointment')) {
+          // Default to appointments if not specified as set or held
+          mainInputType = 'appointments';
+          if (lowerMessage.includes('door')) subInputType = 'appointmentsSetDoorKnocks';
+          else if (lowerMessage.includes('tag')) subInputType = 'appointmentsSetTagsPut';
+          else if (lowerMessage.includes('call')) subInputType = 'appointmentsSetCallsMade';
+          else if (lowerMessage.includes('referral')) subInputType = 'appointmentsSetReferrals';
+          else if (lowerMessage.includes('inbound')) subInputType = 'appointmentsSetInbound';
         } else if (lowerMessage.includes('deal') || lowerMessage.includes('closed')) {
           mainInputType = 'closedDeals';
           if (lowerMessage.includes('door')) subInputType = 'dealsClosedDoorKnocks';
