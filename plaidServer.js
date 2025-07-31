@@ -705,11 +705,133 @@ app.post('/auth/google/callback', async (req, res) => {
 
 // Serve privacy policy and terms of service
 app.get('/privacy-policy', (req, res) => {
-  res.sendFile(path.join(__dirname, 'privacy-policy.html'));
+  res.setHeader('Content-Type', 'text/html');
+  res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - 1099Suite</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; }
+        h1 { color: #f97316; }
+        h2 { color: #374151; margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <h1>Privacy Policy</h1>
+    <p><strong>Last updated:</strong> December 2024</p>
+
+    <h2>1. Information We Collect</h2>
+    <p>1099Suite collects information you provide directly to us, including:</p>
+    <ul>
+        <li>Account information (name, email, password)</li>
+        <li>Business data (expenses, mileage, KPIs)</li>
+        <li>Usage data to improve our services</li>
+    </ul>
+
+    <h2>2. How We Use Your Information</h2>
+    <p>We use your information to:</p>
+    <ul>
+        <li>Provide and maintain our services</li>
+        <li>Process your business data and generate reports</li>
+        <li>Send you important updates about our service</li>
+        <li>Improve our application and user experience</li>
+    </ul>
+
+    <h2>3. Data Security</h2>
+    <p>We implement appropriate security measures to protect your personal information. Your data is encrypted and stored securely using industry-standard practices.</p>
+
+    <h2>4. Third-Party Services</h2>
+    <p>We use trusted third-party services including:</p>
+    <ul>
+        <li>Google OAuth for authentication</li>
+        <li>Supabase for data storage</li>
+        <li>Railway for hosting</li>
+    </ul>
+
+    <h2>5. Your Rights</h2>
+    <p>You have the right to:</p>
+    <ul>
+        <li>Access your personal data</li>
+        <li>Correct inaccurate data</li>
+        <li>Delete your account and data</li>
+        <li>Export your data</li>
+    </ul>
+
+    <h2>6. Contact Us</h2>
+    <p>If you have questions about this privacy policy, please contact us at your support email.</p>
+</body>
+</html>
+  `);
 });
 
 app.get('/terms-of-service', (req, res) => {
-  res.sendFile(path.join(__dirname, 'terms-of-service.html'));
+  res.setHeader('Content-Type', 'text/html');
+  res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terms of Service - 1099Suite</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; }
+        h1 { color: #f97316; }
+        h2 { color: #374151; margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <h1>Terms of Service</h1>
+    <p><strong>Last updated:</strong> December 2024</p>
+
+    <h2>1. Acceptance of Terms</h2>
+    <p>By accessing and using 1099Suite, you accept and agree to be bound by the terms and provision of this agreement.</p>
+
+    <h2>2. Description of Service</h2>
+    <p>1099Suite is a business management application designed for independent contractors to track expenses, mileage, KPIs, and business metrics.</p>
+
+    <h2>3. User Accounts</h2>
+    <p>You are responsible for:</p>
+    <ul>
+        <li>Maintaining the confidentiality of your account</li>
+        <li>All activities that occur under your account</li>
+        <li>Providing accurate and complete information</li>
+    </ul>
+
+    <h2>4. Acceptable Use</h2>
+    <p>You agree not to:</p>
+    <ul>
+        <li>Use the service for any unlawful purpose</li>
+        <li>Attempt to gain unauthorized access to the service</li>
+        <li>Interfere with the proper working of the service</li>
+        <li>Share your account credentials with others</li>
+    </ul>
+
+    <h2>5. Data and Privacy</h2>
+    <p>Your data is important to us. We:</p>
+    <ul>
+        <li>Store your data securely</li>
+        <li>Never sell your personal information</li>
+        <li>Use your data only to provide our services</li>
+        <li>Allow you to export your data at any time</li>
+    </ul>
+
+    <h2>6. Service Availability</h2>
+    <p>We strive to maintain high availability but cannot guarantee uninterrupted service. We may perform maintenance that temporarily affects service availability.</p>
+
+    <h2>7. Limitation of Liability</h2>
+    <p>1099Suite is provided "as is" without warranties of any kind. We are not liable for any damages arising from your use of the service.</p>
+
+    <h2>8. Changes to Terms</h2>
+    <p>We may update these terms from time to time. We will notify users of significant changes via email or in-app notification.</p>
+
+    <h2>9. Contact Information</h2>
+    <p>If you have questions about these terms, please contact us at your support email.</p>
+</body>
+</html>
+  `);
 });
 
 // Example: Add more endpoints here for other backend needs
