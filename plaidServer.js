@@ -193,6 +193,52 @@ app.post('/api/jessica-chat-message', async (req, res) => {
       } else {
         response = "I heard you mention some activity, but I couldn't catch the numbers. Try saying something like 'I knocked 25 doors today' or 'I set 3 appointments'.";
       }
+    } else if (lowerMessage.includes('from') && (lowerMessage.includes('door') || lowerMessage.includes('tag') || lowerMessage.includes('call') || lowerMessage.includes('referral') || lowerMessage.includes('inbound'))) {
+      // Handle detailed sub-inputs like "8 appointments from door knocks" or "5 deals from inbound calls"
+      const numbers = message.match(/\d+/g);
+      if (numbers && numbers.length > 0) {
+        const count = parseInt(numbers[0]);
+        let subInputType = '';
+        let mainInputType = '';
+        
+        if (lowerMessage.includes('appointment') && lowerMessage.includes('set')) {
+          mainInputType = 'appointments';
+          if (lowerMessage.includes('door')) subInputType = 'appointmentsSetDoorKnocks';
+          else if (lowerMessage.includes('tag')) subInputType = 'appointmentsSetTagsPut';
+          else if (lowerMessage.includes('call')) subInputType = 'appointmentsSetCallsMade';
+          else if (lowerMessage.includes('referral')) subInputType = 'appointmentsSetReferrals';
+          else if (lowerMessage.includes('inbound')) subInputType = 'appointmentsSetInbound';
+        } else if (lowerMessage.includes('appointment') && lowerMessage.includes('held')) {
+          mainInputType = 'appointmentHolds';
+          if (lowerMessage.includes('door')) subInputType = 'appointmentsHeldDoorKnocks';
+          else if (lowerMessage.includes('tag')) subInputType = 'appointmentsHeldTagsPut';
+          else if (lowerMessage.includes('call')) subInputType = 'appointmentsHeldCallsMade';
+          else if (lowerMessage.includes('referral')) subInputType = 'appointmentsHeldReferrals';
+          else if (lowerMessage.includes('inbound')) subInputType = 'appointmentsHeldInbound';
+        } else if (lowerMessage.includes('deal') || lowerMessage.includes('closed')) {
+          mainInputType = 'closedDeals';
+          if (lowerMessage.includes('door')) subInputType = 'dealsClosedDoorKnocks';
+          else if (lowerMessage.includes('tag')) subInputType = 'dealsClosedTagsPut';
+          else if (lowerMessage.includes('call')) subInputType = 'dealsClosedCallsMade';
+          else if (lowerMessage.includes('referral')) subInputType = 'dealsClosedReferrals';
+          else if (lowerMessage.includes('inbound')) subInputType = 'dealsClosedInbound';
+        } else if (lowerMessage.includes('account') || lowerMessage.includes('serviced')) {
+          mainInputType = 'accountsServiced';
+          if (lowerMessage.includes('door')) subInputType = 'accountsServicedDoorKnocks';
+          else if (lowerMessage.includes('tag')) subInputType = 'accountsServicedTagsPut';
+          else if (lowerMessage.includes('call')) subInputType = 'accountsServicedCallsMade';
+          else if (lowerMessage.includes('referral')) subInputType = 'accountsServicedReferrals';
+          else if (lowerMessage.includes('inbound')) subInputType = 'accountsServicedInbound';
+        }
+        
+        if (subInputType) {
+          response = `I'll log ${count} ${mainInputType} from ${subInputType.replace(mainInputType, '').toLowerCase()} for today. Great detailed tracking!`;
+        } else {
+          response = `I'll log ${count} ${mainInputType || 'activities'} for today. Keep up the great work!`;
+        }
+      } else {
+        response = "I heard you mention detailed activities, but I couldn't catch the numbers. Try saying something like '8 appointments from door knocks' or '5 deals from inbound calls'.";
+      }
     } else if (lowerMessage.includes('add') && lowerMessage.includes('$')) {
       // Extract expense amount
       const amountMatch = message.match(/\$(\d+(?:\.\d{2})?)/);
