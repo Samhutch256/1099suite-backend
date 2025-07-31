@@ -702,6 +702,15 @@ app.post('/auth/google/callback', async (req, res) => {
   }
 });
 
+// Serve privacy policy and terms of service
+app.get('/privacy-policy', (req, res) => {
+  res.sendFile(path.join(__dirname, 'privacy-policy.html'));
+});
+
+app.get('/terms-of-service', (req, res) => {
+  res.sendFile(path.join(__dirname, 'terms-of-service.html'));
+});
+
 // Example: Add more endpoints here for other backend needs
 
 const PORT = process.env.PORT || 5001;
