@@ -151,66 +151,20 @@ app.get('/api/transactions', async (req, res) => {
 app.post('/api/jessica-chat-message', async (req, res) => {
   const { message, userId } = req.body;
   console.log(`[Jessica] Received message from user ${userId}: ${message}`);
-  console.log(`[Jessica] OpenAI available: ${!!openai}, API Key: ${!!process.env.OPENAI_API_KEY}`);
   
   try {
-    let response;
+    // Simple fallback response for now
+    const fallbackResponses = [
+      "I understand you're asking about that. Let me help you with that.",
+      "That's a great question! Here's what I can tell you about that.",
+      "I'm here to help! Let me provide some guidance on that.",
+      "Thanks for reaching out! I can assist you with that.",
+      "I see what you're asking about. Let me give you some information on that."
+    ];
     
-    if (openai && process.env.OPENAI_API_KEY) {
-      console.log('[Jessica] Using OpenAI for response');
-      try {
-        // Use OpenAI for intelligent responses
-        const completion = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
-          messages: [
-            {
-              role: "system",
-              content: `You are Jessica, an AI assistant for a 1099 contractor management app called 1099Suite. 
-              You help users with:
-              - Business management and organization
-              - Expense tracking and deductions
-              - Lead management and CRM
-              - Mileage tracking
-              - Tax preparation tips
-              - Productivity and efficiency
-              
-              Be helpful, friendly, and professional. Keep responses concise but informative. 
-              If you don't know something specific about the app, suggest they check the relevant section or contact support.`
-            },
-            {
-              role: "user",
-              content: message
-            }
-          ],
-          max_tokens: 500,
-          temperature: 0.7,
-        });
-        
-        response = completion.choices[0]?.message?.content || "I'm here to help!";
-        console.log('[Jessica] OpenAI response received');
-      } catch (openaiError) {
-        console.error('[Jessica] OpenAI error:', openaiError);
-        // Fall back to basic response if OpenAI fails
-        response = "I'm here to help! Let me provide some guidance on that.";
-      }
-    } else {
-      console.log('[Jessica] Using fallback response (no OpenAI)');
-      // Fallback responses if OpenAI is not configured
-      const fallbackResponses = [
-        "I understand you're asking about that. Let me help you with that.",
-        "That's a great question! Here's what I can tell you about that.",
-        "I'm here to help! Let me provide some guidance on that.",
-        "Thanks for reaching out! I can assist you with that.",
-        "I see what you're asking about. Let me give you some information on that."
-      ];
-      
-      response = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
-    }
+    const response = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
     
-    // Simulate processing time
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    console.log(`[Jessica] Sending response: ${response.substring(0, 50)}...`);
+    console.log(`[Jessica] Sending response: ${response}`);
     res.json({
       response: response,
       timestamp: new Date().toISOString()
