@@ -121,6 +121,56 @@ app.get('/api/transactions', async (req, res) => {
   }
 });
 
+// Jessica AI Chat Endpoints
+app.post('/api/jessica-chat-message', async (req, res) => {
+  const { message, userId } = req.body;
+  console.log(`[Jessica] Received message from user ${userId}: ${message}`);
+  
+  try {
+    // Simple response for now - you can integrate with OpenAI, Claude, or other AI services
+    const responses = [
+      "I understand you're asking about that. Let me help you with that.",
+      "That's a great question! Here's what I can tell you about that.",
+      "I'm here to help! Let me provide some guidance on that.",
+      "Thanks for reaching out! I can assist you with that.",
+      "I see what you're asking about. Let me give you some information on that."
+    ];
+    
+    const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+    
+    // Simulate processing time
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    res.json({
+      response: randomResponse,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[Jessica] Chat error:', error);
+    res.status(500).json({ error: 'Failed to process message' });
+  }
+});
+
+app.post('/api/jessica-chat-image', async (req, res) => {
+  console.log('[Jessica] Received image message');
+  
+  try {
+    // For now, return a simple response about image processing
+    const response = "I can see the image you've shared. I'm still learning to process images, but I can help you with text-based questions!";
+    
+    // Simulate processing time
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    res.json({
+      response: response,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[Jessica] Image chat error:', error);
+    res.status(500).json({ error: 'Failed to process image' });
+  }
+});
+
 // Example: Add more endpoints here for other backend needs
 
 const PORT = process.env.PORT || 5001;
