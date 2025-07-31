@@ -206,17 +206,39 @@ app.post('/api/jessica-chat-message', async (req, res) => {
 • Total Mileage Deduction: $${mileage.totalDeduction.toFixed(2)}
 • This Month's Deduction: $${mileage.monthlyDeduction.toFixed(2)}
 • Total Business Miles: ${mileage.totalMileage.toFixed(1)} miles`;
-      } else {
-        // Fallback to context-aware responses
-        if (lowerMessage.includes('expense') || lowerMessage.includes('receipt') || lowerMessage.includes('cost')) {
-          response = "I can help you track expenses! Use the Expenses tab to log your business costs. Take photos of receipts for easy record-keeping. This will help with tax deductions!";
-        } else if (lowerMessage.includes('lead') || lowerMessage.includes('client') || lowerMessage.includes('customer')) {
-          response = "Manage your leads in the CRM section! Add new clients, track follow-ups, and organize your business relationships. This helps you stay on top of opportunities!";
-        } else if (lowerMessage.includes('bank') || lowerMessage.includes('account') || lowerMessage.includes('plaid')) {
-          response = "Connect your bank account using the Plaid integration! This will automatically import your transactions, making expense tracking much easier.";
+      } else if (lowerMessage.includes('lead') || lowerMessage.includes('client') || lowerMessage.includes('customer')) {
+        const supabase = userData.supabaseData;
+        if (supabase && supabase.totalLeads > 0) {
+          response = `Your lead management summary:
+• Total Leads: ${supabase.totalLeads}
+• Total Clients: ${supabase.totalClients}
+• Recent Leads: ${supabase.leads.slice(0, 3).map(l => l.name || l.company).join(', ')}`;
         } else {
-          response = "I can see your data! Ask me about your KPIs, mileage, today's progress, revenue, or tax deductions for specific insights.";
+          response = "Manage your leads in the CRM section! Add new clients, track follow-ups, and organize your business relationships. This helps you stay on top of opportunities!";
         }
+      } else if (lowerMessage.includes('expense') || lowerMessage.includes('receipt') || lowerMessage.includes('cost')) {
+        const supabase = userData.supabaseData;
+        if (supabase && supabase.totalExpenses > 0) {
+          response = `Your expense tracking summary:
+• Total Expenses: ${supabase.totalExpenses}
+• Total Amount: $${supabase.totalExpenseAmount.toFixed(2)}
+• Expense Categories: ${supabase.expenseCategories.length}`;
+        } else {
+          response = "I can help you track expenses! Use the Expenses tab to log your business costs. Take photos of receipts for easy record-keeping. This will help with tax deductions!";
+        }
+      } else if (lowerMessage.includes('team') || lowerMessage.includes('member')) {
+        const supabase = userData.supabaseData;
+        if (supabase && supabase.totalTeamMembers > 0) {
+          response = `Your team summary:
+• Total Team Members: ${supabase.totalTeamMembers}
+• Team Members: ${supabase.teamMembers.map(m => m.name).join(', ')}`;
+        } else {
+          response = "Build your team! Add team members to track their performance and manage your business growth.";
+        }
+      } else if (lowerMessage.includes('bank') || lowerMessage.includes('account') || lowerMessage.includes('plaid')) {
+        response = "Connect your bank account using the Plaid integration! This will automatically import your transactions, making expense tracking much easier.";
+      } else {
+        response = "I can see your data! Ask me about your KPIs, mileage, leads, expenses, team, today's progress, revenue, or tax deductions for specific insights.";
       }
     } else {
       // No user data available - use generic responses
