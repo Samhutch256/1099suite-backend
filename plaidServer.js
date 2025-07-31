@@ -157,11 +157,77 @@ app.post('/api/jessica-chat-message', async (req, res) => {
     let response;
     const lowerMessage = message.toLowerCase();
     
-    // If user data is available, provide data-driven responses
-    if (userData && userData.kpiData && userData.mileageData) {
-      console.log('[Jessica] Using user data for intelligent response');
-      
-      if (lowerMessage.includes('kpi') || lowerMessage.includes('performance') || lowerMessage.includes('metrics')) {
+    // Check for input commands first
+    if (lowerMessage.includes('add') || lowerMessage.includes('log') || lowerMessage.includes('record')) {
+      if (lowerMessage.includes('door') || lowerMessage.includes('knock')) {
+        response = "I can help you log doors knocked! Just tell me how many doors you knocked today, like 'I knocked 25 doors today' or 'Add 25 doors'.";
+      } else if (lowerMessage.includes('appointment')) {
+        response = "I can help you log appointments! Just tell me how many appointments you set today, like 'I set 3 appointments today' or 'Add 3 appointments'.";
+      } else if (lowerMessage.includes('deal') || lowerMessage.includes('close')) {
+        response = "I can help you log closed deals! Just tell me how many deals you closed today, like 'I closed 2 deals today' or 'Add 2 deals'.";
+      } else if (lowerMessage.includes('mileage') || lowerMessage.includes('trip')) {
+        response = "I can help you log mileage trips! Just tell me the details like 'Add 15 miles for client meeting' or 'Log 20 miles business trip'.";
+      } else if (lowerMessage.includes('expense') || lowerMessage.includes('cost')) {
+        response = "I can help you log expenses! Just tell me the amount and description like 'Add $50 expense for gas' or 'Log $25 for lunch'.";
+      } else if (lowerMessage.includes('lead') || lowerMessage.includes('client')) {
+        response = "I can help you add leads! Just tell me the name and company like 'Add lead John Smith from ABC Corp' or 'Log new client Jane Doe'.";
+      } else if (lowerMessage.includes('team') || lowerMessage.includes('member')) {
+        response = "I can help you add team members! Just tell me the name and role like 'Add team member Mike as Sales Rep' or 'Log new member Sarah'.";
+      } else {
+        response = "I can help you log data! Try saying things like:\n• 'Add 25 doors knocked'\n• 'Log 3 appointments'\n• 'Add $50 expense for gas'\n• 'Add lead John Smith'\n• 'Log 15 miles for client meeting'";
+      }
+    } else if (lowerMessage.includes('i knocked') || lowerMessage.includes('i set') || lowerMessage.includes('i closed') || lowerMessage.includes('i worked')) {
+      // Extract numbers from natural language
+      const numbers = message.match(/\d+/g);
+      if (numbers && numbers.length > 0) {
+        const count = parseInt(numbers[0]);
+        if (lowerMessage.includes('knocked') || lowerMessage.includes('door')) {
+          response = `I'll log ${count} doors knocked for today. You can also tell me appointments, deals, or hours worked!`;
+        } else if (lowerMessage.includes('appointment') || lowerMessage.includes('set')) {
+          response = `I'll log ${count} appointments for today. Great work!`;
+        } else if (lowerMessage.includes('deal') || lowerMessage.includes('closed')) {
+          response = `I'll log ${count} deals closed for today. Excellent!`;
+        } else if (lowerMessage.includes('hour') || lowerMessage.includes('worked')) {
+          response = `I'll log ${count} hours worked for today. Keep it up!`;
+        }
+      } else {
+        response = "I heard you mention some activity, but I couldn't catch the numbers. Try saying something like 'I knocked 25 doors today' or 'I set 3 appointments'.";
+      }
+    } else if (lowerMessage.includes('add') && lowerMessage.includes('$')) {
+      // Extract expense amount
+      const amountMatch = message.match(/\$(\d+(?:\.\d{2})?)/);
+      if (amountMatch) {
+        const amount = parseFloat(amountMatch[1]);
+        const description = message.replace(/\$(\d+(?:\.\d{2})?)/, '').replace(/add/i, '').trim();
+        response = `I'll log a $${amount.toFixed(2)} expense for ${description || 'business expense'}. This will help with your tax deductions!`;
+      }
+    } else if (lowerMessage.includes('add lead') || lowerMessage.includes('add client')) {
+      // Extract lead/client name
+      const nameMatch = message.match(/add (?:lead|client) (.+?)(?: from (.+))?$/i);
+      if (nameMatch) {
+        const name = nameMatch[1];
+        const company = nameMatch[2];
+        response = `I'll add ${name}${company ? ` from ${company}` : ''} as a new lead. I'll also need their contact info later!`;
+      }
+    } else if (lowerMessage.includes('add team member') || lowerMessage.includes('add member')) {
+      // Extract team member name
+      const nameMatch = message.match(/add (?:team member|member) (.+?)(?: as (.+))?$/i);
+      if (nameMatch) {
+        const name = nameMatch[1];
+        const role = nameMatch[2];
+        response = `I'll add ${name}${role ? ` as ${role}` : ' as a team member'}. Welcome to the team!`;
+      }
+    } else if (lowerMessage.includes('add') && lowerMessage.includes('mile')) {
+      // Extract mileage
+      const mileageMatch = message.match(/(\d+(?:\.\d+)?)\s*miles?/i);
+      if (mileageMatch) {
+        const miles = parseFloat(mileageMatch[1]);
+        response = `I'll log ${miles} miles for your business trip. This will help with your tax deductions!`;
+      }
+    } else if (lowerMessage.includes('kpi') || lowerMessage.includes('performance') || lowerMessage.includes('metrics')) {
+      // If user data is available, provide data-driven responses
+      if (userData && userData.kpiData && userData.mileageData) {
+        console.log('[Jessica] Using user data for intelligent response');
         const kpi = userData.kpiData;
         response = `Here are your current KPIs:
 • Total Doors: ${kpi.totalDoors}
@@ -173,7 +239,11 @@ app.post('/api/jessica-chat-message', async (req, res) => {
 • Appointment Hold Rate: ${(kpi.appointmentHoldRate * 100).toFixed(1)}%
 • Appointment to Closed Rate: ${(kpi.appointmentToClosedRate * 100).toFixed(1)}%
 • Dollars per Hour: $${kpi.dollarsPerHour.toFixed(2)}`;
-      } else if (lowerMessage.includes('mileage') || lowerMessage.includes('drive') || lowerMessage.includes('car')) {
+      } else {
+        response = "I can help you track your KPIs! Try logging your daily activities and I'll show you your performance metrics.";
+      }
+    } else if (lowerMessage.includes('mileage') || lowerMessage.includes('drive') || lowerMessage.includes('car')) {
+      if (userData && userData.kpiData && userData.mileageData) {
         const mileage = userData.mileageData;
         response = `Your mileage summary:
 • Total Mileage: ${mileage.totalMileage.toFixed(1)} miles
@@ -181,7 +251,11 @@ app.post('/api/jessica-chat-message', async (req, res) => {
 • This Month: ${mileage.monthlyMileage.toFixed(1)} miles ($${mileage.monthlyDeduction.toFixed(2)})
 • Business Trips: ${mileage.tripsByType.business}
 • Personal Trips: ${mileage.tripsByType.personal}`;
-      } else if (lowerMessage.includes('today') || lowerMessage.includes('progress')) {
+      } else {
+        response = "For mileage tracking, use the Mileage tab to log your business trips. Keep track of start/end locations and purposes. This is crucial for tax deductions!";
+      }
+    } else if (lowerMessage.includes('today') || lowerMessage.includes('progress')) {
+      if (userData && userData.kpiData && userData.mileageData) {
         const today = userData.kpiData.todayInput;
         if (today) {
           response = `Today's progress:
@@ -192,81 +266,74 @@ app.post('/api/jessica-chat-message', async (req, res) => {
 • Accounts Serviced: ${today.accountsServiced}
 • Hours Worked: ${today.hoursWorked}`;
         } else {
-          response = "I don't see any data for today yet. Use the Input tab to log your daily activities!";
+          response = "I don't see any data for today yet. Try saying 'I knocked 25 doors today' or 'Add 3 appointments' to log your activities!";
         }
-      } else if (lowerMessage.includes('revenue') || lowerMessage.includes('income') || lowerMessage.includes('earnings')) {
+      } else {
+        response = "I don't see any data for today yet. Use the Input tab to log your daily activities!";
+      }
+    } else if (lowerMessage.includes('revenue') || lowerMessage.includes('income') || lowerMessage.includes('earnings')) {
+      if (userData && userData.kpiData && userData.mileageData) {
         const kpi = userData.kpiData;
         response = `Your revenue metrics:
 • Total Revenue: $${kpi.totalRevenue.toFixed(2)}
 • Dollars per Hour: $${kpi.dollarsPerHour.toFixed(2)}
 • Total Hours Worked: ${kpi.totalHoursWorked}`;
-      } else if (lowerMessage.includes('deduction') || lowerMessage.includes('tax')) {
+      } else {
+        response = "Track your revenue by logging your hours worked and income. I can help you calculate your dollars per hour!";
+      }
+    } else if (lowerMessage.includes('deduction') || lowerMessage.includes('tax')) {
+      if (userData && userData.kpiData && userData.mileageData) {
         const mileage = userData.mileageData;
         response = `Your tax deduction summary:
 • Total Mileage Deduction: $${mileage.totalDeduction.toFixed(2)}
 • This Month's Deduction: $${mileage.monthlyDeduction.toFixed(2)}
 • Total Business Miles: ${mileage.totalMileage.toFixed(1)} miles`;
-      } else if (lowerMessage.includes('lead') || lowerMessage.includes('client') || lowerMessage.includes('customer')) {
+      } else {
+        response = "Great question about taxes! Track all your business expenses, mileage, and income here. Come tax time, you'll have everything organized for your 1099 filing!";
+      }
+    } else if (lowerMessage.includes('lead') || lowerMessage.includes('client') || lowerMessage.includes('customer')) {
+      if (userData && userData.supabaseData && userData.supabaseData.totalLeads > 0) {
         const supabase = userData.supabaseData;
-        if (supabase && supabase.totalLeads > 0) {
-          response = `Your lead management summary:
+        response = `Your lead management summary:
 • Total Leads: ${supabase.totalLeads}
 • Total Clients: ${supabase.totalClients}
 • Recent Leads: ${supabase.leads.slice(0, 3).map(l => l.name || l.company).join(', ')}`;
-        } else {
-          response = "Manage your leads in the CRM section! Add new clients, track follow-ups, and organize your business relationships. This helps you stay on top of opportunities!";
-        }
-      } else if (lowerMessage.includes('expense') || lowerMessage.includes('receipt') || lowerMessage.includes('cost')) {
+      } else {
+        response = "Manage your leads in the CRM section! Add new clients, track follow-ups, and organize your business relationships. This helps you stay on top of opportunities!";
+      }
+    } else if (lowerMessage.includes('expense') || lowerMessage.includes('receipt') || lowerMessage.includes('cost')) {
+      if (userData && userData.supabaseData && userData.supabaseData.totalExpenses > 0) {
         const supabase = userData.supabaseData;
-        if (supabase && supabase.totalExpenses > 0) {
-          response = `Your expense tracking summary:
+        response = `Your expense tracking summary:
 • Total Expenses: ${supabase.totalExpenses}
 • Total Amount: $${supabase.totalExpenseAmount.toFixed(2)}
 • Expense Categories: ${supabase.expenseCategories.length}`;
-        } else {
-          response = "I can help you track expenses! Use the Expenses tab to log your business costs. Take photos of receipts for easy record-keeping. This will help with tax deductions!";
-        }
-      } else if (lowerMessage.includes('team') || lowerMessage.includes('member')) {
+      } else {
+        response = "I can help you track expenses! Use the Expenses tab to log your business costs. Take photos of receipts for easy record-keeping. This will help with tax deductions!";
+      }
+    } else if (lowerMessage.includes('team') || lowerMessage.includes('member')) {
+      if (userData && userData.supabaseData && userData.supabaseData.totalTeamMembers > 0) {
         const supabase = userData.supabaseData;
-        if (supabase && supabase.totalTeamMembers > 0) {
-          response = `Your team summary:
+        response = `Your team summary:
 • Total Team Members: ${supabase.totalTeamMembers}
 • Team Members: ${supabase.teamMembers.map(m => m.name).join(', ')}`;
-        } else {
-          response = "Build your team! Add team members to track their performance and manage your business growth.";
-        }
-      } else if (lowerMessage.includes('bank') || lowerMessage.includes('account') || lowerMessage.includes('plaid')) {
-        response = "Connect your bank account using the Plaid integration! This will automatically import your transactions, making expense tracking much easier.";
       } else {
-        response = "I can see your data! Ask me about your KPIs, mileage, leads, expenses, team, today's progress, revenue, or tax deductions for specific insights.";
+        response = "Build your team! Add team members to track their performance and manage your business growth.";
       }
+    } else if (lowerMessage.includes('bank') || lowerMessage.includes('account') || lowerMessage.includes('plaid')) {
+      response = "Connect your bank account using the Plaid integration! This will automatically import your transactions, making expense tracking much easier.";
+    } else if (lowerMessage.includes('help') || lowerMessage.includes('how') || lowerMessage.includes('what')) {
+      response = "I'm here to help with your 1099 business! I can assist with:\n• Logging daily activities (doors, appointments, deals)\n• Tracking expenses and mileage\n• Adding leads and team members\n• Analyzing your KPIs and performance\n\nTry saying things like:\n• 'I knocked 25 doors today'\n• 'Add $50 expense for gas'\n• 'Add lead John Smith'\n• 'What are my KPIs?'";
     } else {
-      // No user data available - use generic responses
-      console.log('[Jessica] No user data available, using generic responses');
-      
-      if (lowerMessage.includes('expense') || lowerMessage.includes('receipt') || lowerMessage.includes('cost')) {
-        response = "I can help you track expenses! Use the Expenses tab to log your business costs. Take photos of receipts for easy record-keeping. This will help with tax deductions!";
-      } else if (lowerMessage.includes('mileage') || lowerMessage.includes('drive') || lowerMessage.includes('car')) {
-        response = "For mileage tracking, use the Mileage tab to log your business trips. Keep track of start/end locations and purposes. This is crucial for tax deductions!";
-      } else if (lowerMessage.includes('lead') || lowerMessage.includes('client') || lowerMessage.includes('customer')) {
-        response = "Manage your leads in the CRM section! Add new clients, track follow-ups, and organize your business relationships. This helps you stay on top of opportunities!";
-      } else if (lowerMessage.includes('tax') || lowerMessage.includes('deduction') || lowerMessage.includes('1099')) {
-        response = "Great question about taxes! Track all your business expenses, mileage, and income here. Come tax time, you'll have everything organized for your 1099 filing!";
-      } else if (lowerMessage.includes('bank') || lowerMessage.includes('account') || lowerMessage.includes('plaid')) {
-        response = "Connect your bank account using the Plaid integration! This will automatically import your transactions, making expense tracking much easier.";
-      } else if (lowerMessage.includes('help') || lowerMessage.includes('how') || lowerMessage.includes('what')) {
-        response = "I'm here to help with your 1099 business! I can assist with expense tracking, mileage logging, lead management, and tax preparation. What would you like to know more about?";
-      } else {
-        // Default helpful responses
-        const fallbackResponses = [
-          "I'm here to help with your 1099 business management! How can I assist you today?",
-          "Great question! I can help you with expenses, mileage, leads, and tax preparation. What would you like to focus on?",
-          "I understand you're asking about that. Let me help you with your business organization!",
-          "Thanks for reaching out! I can assist you with expense tracking, mileage logging, and lead management.",
-          "I see what you're asking about. Let me give you some guidance on business management!"
-        ];
-        response = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
-      }
+      // Default helpful responses
+      const fallbackResponses = [
+        "I'm here to help with your 1099 business management! How can I assist you today?",
+        "Great question! I can help you with expenses, mileage, leads, and tax preparation. What would you like to focus on?",
+        "I understand you're asking about that. Let me help you with your business organization!",
+        "Thanks for reaching out! I can assist you with expense tracking, mileage logging, and lead management.",
+        "I see what you're asking about. Let me give you some guidance on business management!"
+      ];
+      response = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
     }
     
     console.log(`[Jessica] Sending response: ${response.substring(0, 100)}...`);
