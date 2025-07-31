@@ -239,6 +239,70 @@ app.post('/api/jessica-chat-message', async (req, res) => {
       } else {
         response = "I heard you mention detailed activities, but I couldn't catch the numbers. Try saying something like '8 appointments from door knocks' or '5 deals from inbound calls'.";
       }
+    } else if (lowerMessage.includes('\n') || lowerMessage.includes('•') || lowerMessage.includes('-') || lowerMessage.includes('*')) {
+      // Handle multi-line input with multiple activities
+      const lines = message.split(/[\n•\-*]/).filter(line => line.trim().length > 0);
+      if (lines.length > 1) {
+        const activities = [];
+        let totalDoors = 0;
+        let totalAppointments = 0;
+        let totalDeals = 0;
+        let totalAccounts = 0;
+        
+        for (const line of lines) {
+          const trimmedLine = line.trim().toLowerCase();
+          const numbers = trimmedLine.match(/\d+/g);
+          if (numbers && numbers.length > 0) {
+            const count = parseInt(numbers[0]);
+            
+            if (trimmedLine.includes('appointment') && trimmedLine.includes('set')) {
+              totalAppointments += count;
+              if (trimmedLine.includes('door')) activities.push(`${count} appointments from door knocks`);
+              else if (trimmedLine.includes('tag')) activities.push(`${count} appointments from tags`);
+              else if (trimmedLine.includes('call')) activities.push(`${count} appointments from calls`);
+              else if (trimmedLine.includes('referral')) activities.push(`${count} appointments from referrals`);
+              else if (trimmedLine.includes('inbound')) activities.push(`${count} appointments from inbound`);
+            } else if (trimmedLine.includes('appointment') && trimmedLine.includes('held')) {
+              if (trimmedLine.includes('door')) activities.push(`${count} appointments held from door knocks`);
+              else if (trimmedLine.includes('tag')) activities.push(`${count} appointments held from tags`);
+              else if (trimmedLine.includes('call')) activities.push(`${count} appointments held from calls`);
+              else if (trimmedLine.includes('referral')) activities.push(`${count} appointments held from referrals`);
+              else if (trimmedLine.includes('inbound')) activities.push(`${count} appointments held from inbound`);
+            } else if (trimmedLine.includes('deal') || trimmedLine.includes('closed')) {
+              totalDeals += count;
+              if (trimmedLine.includes('door')) activities.push(`${count} deals from door knocks`);
+              else if (trimmedLine.includes('tag')) activities.push(`${count} deals from tags`);
+              else if (trimmedLine.includes('call')) activities.push(`${count} deals from calls`);
+              else if (trimmedLine.includes('referral')) activities.push(`${count} deals from referrals`);
+              else if (trimmedLine.includes('inbound')) activities.push(`${count} deals from inbound`);
+            } else if (trimmedLine.includes('account') || trimmedLine.includes('serviced')) {
+              totalAccounts += count;
+              if (trimmedLine.includes('door')) activities.push(`${count} accounts from door knocks`);
+              else if (trimmedLine.includes('tag')) activities.push(`${count} accounts from tags`);
+              else if (trimmedLine.includes('call')) activities.push(`${count} accounts from calls`);
+              else if (trimmedLine.includes('referral')) activities.push(`${count} accounts from referrals`);
+              else if (trimmedLine.includes('inbound')) activities.push(`${count} accounts from inbound`);
+            } else if (trimmedLine.includes('knocked') || trimmedLine.includes('door')) {
+              totalDoors += count;
+              activities.push(`${count} doors knocked`);
+            }
+          }
+        }
+        
+        if (activities.length > 0) {
+          const summary = [];
+          if (totalDoors > 0) summary.push(`${totalDoors} doors knocked`);
+          if (totalAppointments > 0) summary.push(`${totalAppointments} appointments set`);
+          if (totalDeals > 0) summary.push(`${totalDeals} deals closed`);
+          if (totalAccounts > 0) summary.push(`${totalAccounts} accounts serviced`);
+          
+          response = `I'll log all your activities for today:\n• ${activities.join('\n• ')}\n\nSummary: ${summary.join(', ')}. Excellent detailed tracking!`;
+        } else {
+          response = "I see you've listed multiple activities, but I couldn't parse the specific numbers. Try formatting like:\n• 8 appointments from door knocks\n• 5 deals from inbound calls\n• 3 appointments held from referrals";
+        }
+      } else {
+        response = "I see you've provided multiple activities. I'll process each one and log them all for today!";
+      }
     } else if (lowerMessage.includes('add') && lowerMessage.includes('$')) {
       // Extract expense amount
       const amountMatch = message.match(/\$(\d+(?:\.\d{2})?)/);
