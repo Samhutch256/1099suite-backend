@@ -10,14 +10,27 @@ console.log('[Plaid] ENV loaded:', {
 if (!process.env.PLAID_CLIENT_ID || !process.env.PLAID_SECRET || !process.env.PLAID_ENV) {
   console.warn('[Plaid] WARNING: Missing one or more required Plaid environment variables!');
 }
+
+// Check for OpenAI API key
+console.log('[Jessica] OpenAI API Key:', !!process.env.OPENAI_API_KEY);
+if (!process.env.OPENAI_API_KEY) {
+  console.warn('[Jessica] WARNING: OpenAI API key not found. Jessica will use fallback responses.');
+}
+
 const express = require('express');
 const cors = require('cors');
 const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid');
 const { createClient } = require('@supabase/supabase-js');
+const OpenAI = require('openai');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -127,22 +140,55 @@ app.post('/api/jessica-chat-message', async (req, res) => {
   console.log(`[Jessica] Received message from user ${userId}: ${message}`);
   
   try {
-    // Simple response for now - you can integrate with OpenAI, Claude, or other AI services
-    const responses = [
-      "I understand you're asking about that. Let me help you with that.",
-      "That's a great question! Here's what I can tell you about that.",
-      "I'm here to help! Let me provide some guidance on that.",
-      "Thanks for reaching out! I can assist you with that.",
-      "I see what you're asking about. Let me give you some information on that."
-    ];
+    let response;
     
-    const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+    if (process.env.OPENAI_API_KEY) {
+      // Use OpenAI for intelligent responses
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `You are Jessica, an AI assistant for a 1099 contractor management app called 1099Suite. 
+            You help users with:
+            - Business management and organization
+            - Expense tracking and deductions
+            - Lead management and CRM
+            - Mileage tracking
+            - Tax preparation tips
+            - Productivity and efficiency
+            
+            Be helpful, friendly, and professional. Keep responses concise but informative. 
+            If you don't know something specific about the app, suggest they check the relevant section or contact support.`
+          },
+          {
+            role: "user",
+            content: message
+          }
+        ],
+        max_tokens: 500,
+        temperature: 0.7,
+      });
+      
+      response = completion.choices[0]?.message?.content || "I'm here to help!";
+    } else {
+      // Fallback responses if OpenAI is not configured
+      const fallbackResponses = [
+        "I understand you're asking about that. Let me help you with that.",
+        "That's a great question! Here's what I can tell you about that.",
+        "I'm here to help! Let me provide some guidance on that.",
+        "Thanks for reaching out! I can assist you with that.",
+        "I see what you're asking about. Let me give you some information on that."
+      ];
+      
+      response = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+    }
     
     // Simulate processing time
     await new Promise(resolve => setTimeout(resolve, 1000));
     
     res.json({
-      response: randomResponse,
+      response: response,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -155,8 +201,42 @@ app.post('/api/jessica-chat-image', async (req, res) => {
   console.log('[Jessica] Received image message');
   
   try {
-    // For now, return a simple response about image processing
-    const response = "I can see the image you've shared. I'm still learning to process images, but I can help you with text-based questions!";
+    let response;
+    
+    if (process.env.OPENAI_API_KEY) {
+      // Use OpenAI for image analysis
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are Jessica, an AI assistant for a 1099 contractor management app. 
+            Analyze the image the user has shared and provide helpful insights related to:
+            - Business expenses and receipts
+            - Mileage tracking
+            - Tax deductions
+            - Business organization
+            - Productivity tips
+            
+            Be helpful and professional. If the image isn't business-related, politely redirect to business topics.`
+          },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Please analyze this image and provide business-related insights:" },
+              { type: "image_url", image_url: { url: req.body.imageUrl } }
+            ]
+          }
+        ],
+        max_tokens: 500,
+        temperature: 0.7,
+      });
+      
+      response = completion.choices[0]?.message?.content || "I can see the image you've shared. Let me help you with business insights!";
+    } else {
+      // Fallback response if OpenAI is not configured
+      response = "I can see the image you've shared. I'm still learning to process images, but I can help you with text-based questions about business management, expenses, and tax deductions!";
+    }
     
     // Simulate processing time
     await new Promise(resolve => setTimeout(resolve, 1500));
