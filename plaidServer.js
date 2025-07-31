@@ -22,6 +22,7 @@ const cors = require('cors');
 const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid');
 const { createClient } = require('@supabase/supabase-js');
 const OpenAI = require('openai');
+const { OAuth2Client } = require('google-auth-library');
 
 const app = express();
 app.use(cors());
@@ -574,8 +575,14 @@ app.post('/api/jessica-chat-image', async (req, res) => {
   }
 });
 
+// Google OAuth configuration
+const googleOAuthClient = new OAuth2Client(
+  process.env.GOOGLE_CLIENT_ID || '515087564181-mb5m4vpkhf56j4jh07j34ouoogqbbj6e.apps.googleusercontent.com',
+  process.env.GOOGLE_CLIENT_SECRET
+);
+
 // Google OAuth callback endpoint
-app.get('/auth/google/callback', (req, res) => {
+app.get('/auth/google/callback', async (req, res) => {
   console.log('[Google OAuth] Callback received:', req.query);
   
   // Extract the authorization code from the query parameters
@@ -586,18 +593,113 @@ app.get('/auth/google/callback', (req, res) => {
     return res.status(400).json({ error: 'No authorization code received' });
   }
   
-  // For now, just log the code and return success
-  // In a full implementation, you would exchange this code for tokens
-  console.log('[Google OAuth] Authorization code received:', code);
+  try {
+    // Exchange the authorization code for tokens
+    const { tokens } = await googleOAuthClient.getToken(code);
+    console.log('[Google OAuth] Tokens received:', { 
+      access_token: !!tokens.access_token,
+      refresh_token: !!tokens.refresh_token,
+      id_token: !!tokens.id_token 
+    });
+    
+    // Get user info from Google
+    const ticket = await googleOAuthClient.verifyIdToken({
+      idToken: tokens.id_token,
+      audience: process.env.GOOGLE_CLIENT_ID || '515087564181-mb5m4vpkhf56j4jh07j34ouoogqbbj6e.apps.googleusercontent.com'
+    });
+    
+    const payload = ticket.getPayload();
+    console.log('[Google OAuth] User info:', {
+      email: payload.email,
+      name: payload.name,
+      picture: payload.picture
+    });
+    
+    // Return user data and tokens
+    res.json({
+      success: true,
+      message: 'Google OAuth successful',
+      user: {
+        email: payload.email,
+        name: payload.name,
+        picture: payload.picture,
+        sub: payload.sub
+      },
+      tokens: {
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        id_token: tokens.id_token
+      },
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('[Google OAuth] Token exchange error:', error);
+    res.status(500).json({ 
+      error: 'Failed to exchange authorization code for tokens',
+      details: error.message 
+    });
+  }
+});
+
+// Google OAuth token exchange endpoint (POST)
+app.post('/auth/google/callback', async (req, res) => {
+  console.log('[Google OAuth] Token exchange request received');
   
-  // Return a simple success response
-  // In a real app, you might redirect to your app or return tokens
-  res.json({
-    success: true,
-    message: 'Google OAuth callback received successfully',
-    code: code,
-    timestamp: new Date().toISOString()
-  });
+  const { code } = req.body;
+  
+  if (!code) {
+    console.error('[Google OAuth] No authorization code received');
+    return res.status(400).json({ error: 'No authorization code received' });
+  }
+  
+  try {
+    // Exchange the authorization code for tokens
+    const { tokens } = await googleOAuthClient.getToken(code);
+    console.log('[Google OAuth] Tokens received:', { 
+      access_token: !!tokens.access_token,
+      refresh_token: !!tokens.refresh_token,
+      id_token: !!tokens.id_token 
+    });
+    
+    // Get user info from Google
+    const ticket = await googleOAuthClient.verifyIdToken({
+      idToken: tokens.id_token,
+      audience: process.env.GOOGLE_CLIENT_ID || '515087564181-mb5m4vpkhf56j4jh07j34ouoogqbbj6e.apps.googleusercontent.com'
+    });
+    
+    const payload = ticket.getPayload();
+    console.log('[Google OAuth] User info:', {
+      email: payload.email,
+      name: payload.name,
+      picture: payload.picture
+    });
+    
+    // Return user data and tokens
+    res.json({
+      success: true,
+      message: 'Google OAuth successful',
+      user: {
+        email: payload.email,
+        name: payload.name,
+        picture: payload.picture,
+        sub: payload.sub
+      },
+      tokens: {
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        id_token: tokens.id_token
+      },
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('[Google OAuth] Token exchange error:', error);
+    res.status(500).json({ 
+      error: 'Failed to exchange authorization code for tokens',
+      details: error.message 
+    });
+  }
 });
 
 // Example: Add more endpoints here for other backend needs
