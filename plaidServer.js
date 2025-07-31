@@ -305,7 +305,15 @@ app.post('/api/jessica-chat-message', async (req, res) => {
         }
         
         if (subInputType) {
-          response = `I'll log ${count} ${mainInputType} from ${subInputType.replace(mainInputType, '').toLowerCase()} for today. Great detailed tracking!`;
+          // Create a more readable response
+          let sourceName = '';
+          if (subInputType.includes('DoorKnocks')) sourceName = 'door knocks';
+          else if (subInputType.includes('TagsPut')) sourceName = 'tags put';
+          else if (subInputType.includes('CallsMade')) sourceName = 'calls made';
+          else if (subInputType.includes('Referrals')) sourceName = 'referrals';
+          else if (subInputType.includes('Inbound')) sourceName = 'inbound';
+          
+          response = `I'll log ${count} ${mainInputType} from ${sourceName} for today. Great detailed tracking!`;
         } else {
           response = `I'll log ${count} ${mainInputType || 'activities'} for today. Keep up the great work!`;
         }
