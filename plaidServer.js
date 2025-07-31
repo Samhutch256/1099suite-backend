@@ -28,9 +28,9 @@ app.use(cors());
 app.use(express.json());
 
 // Initialize OpenAI client
-const openai = new OpenAI({
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-});
+}) : null;
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -142,7 +142,7 @@ app.post('/api/jessica-chat-message', async (req, res) => {
   try {
     let response;
     
-    if (process.env.OPENAI_API_KEY) {
+    if (openai && process.env.OPENAI_API_KEY) {
       // Use OpenAI for intelligent responses
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
@@ -203,7 +203,7 @@ app.post('/api/jessica-chat-image', async (req, res) => {
   try {
     let response;
     
-    if (process.env.OPENAI_API_KEY) {
+    if (openai && process.env.OPENAI_API_KEY) {
       // Use OpenAI for image analysis
       const completion = await openai.chat.completions.create({
         model: "gpt-4o",
