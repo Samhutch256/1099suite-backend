@@ -19,6 +19,7 @@ if (!process.env.OPENAI_API_KEY) {
 
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid');
 const { createClient } = require('@supabase/supabase-js');
 const OpenAI = require('openai');
