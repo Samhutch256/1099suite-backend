@@ -153,16 +153,33 @@ app.post('/api/jessica-chat-message', async (req, res) => {
   console.log(`[Jessica] Received message from user ${userId}: ${message}`);
   
   try {
-    // Simple fallback response for now
-    const fallbackResponses = [
-      "I understand you're asking about that. Let me help you with that.",
-      "That's a great question! Here's what I can tell you about that.",
-      "I'm here to help! Let me provide some guidance on that.",
-      "Thanks for reaching out! I can assist you with that.",
-      "I see what you're asking about. Let me give you some information on that."
-    ];
+    let response;
+    const lowerMessage = message.toLowerCase();
     
-    const response = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+    // Context-aware responses based on keywords
+    if (lowerMessage.includes('expense') || lowerMessage.includes('receipt') || lowerMessage.includes('cost')) {
+      response = "I can help you track expenses! Use the Expenses tab to log your business costs. Take photos of receipts for easy record-keeping. This will help with tax deductions!";
+    } else if (lowerMessage.includes('mileage') || lowerMessage.includes('drive') || lowerMessage.includes('car')) {
+      response = "For mileage tracking, use the Mileage tab to log your business trips. Keep track of start/end locations and purposes. This is crucial for tax deductions!";
+    } else if (lowerMessage.includes('lead') || lowerMessage.includes('client') || lowerMessage.includes('customer')) {
+      response = "Manage your leads in the CRM section! Add new clients, track follow-ups, and organize your business relationships. This helps you stay on top of opportunities!";
+    } else if (lowerMessage.includes('tax') || lowerMessage.includes('deduction') || lowerMessage.includes('1099')) {
+      response = "Great question about taxes! Track all your business expenses, mileage, and income here. Come tax time, you'll have everything organized for your 1099 filing!";
+    } else if (lowerMessage.includes('bank') || lowerMessage.includes('account') || lowerMessage.includes('plaid')) {
+      response = "Connect your bank account using the Plaid integration! This will automatically import your transactions, making expense tracking much easier.";
+    } else if (lowerMessage.includes('help') || lowerMessage.includes('how') || lowerMessage.includes('what')) {
+      response = "I'm here to help with your 1099 business! I can assist with expense tracking, mileage logging, lead management, and tax preparation. What would you like to know more about?";
+    } else {
+      // Default helpful responses
+      const fallbackResponses = [
+        "I'm here to help with your 1099 business management! How can I assist you today?",
+        "Great question! I can help you with expenses, mileage, leads, and tax preparation. What would you like to focus on?",
+        "I understand you're asking about that. Let me help you with your business organization!",
+        "Thanks for reaching out! I can assist you with expense tracking, mileage logging, and lead management.",
+        "I see what you're asking about. Let me give you some guidance on business management!"
+      ];
+      response = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+    }
     
     console.log(`[Jessica] Sending response: ${response}`);
     res.json({
