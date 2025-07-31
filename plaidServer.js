@@ -151,40 +151,50 @@ app.get('/api/transactions', async (req, res) => {
 app.post('/api/jessica-chat-message', async (req, res) => {
   const { message, userId } = req.body;
   console.log(`[Jessica] Received message from user ${userId}: ${message}`);
+  console.log(`[Jessica] OpenAI available: ${!!openai}, API Key: ${!!process.env.OPENAI_API_KEY}`);
   
   try {
     let response;
     
     if (openai && process.env.OPENAI_API_KEY) {
-      // Use OpenAI for intelligent responses
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: `You are Jessica, an AI assistant for a 1099 contractor management app called 1099Suite. 
-            You help users with:
-            - Business management and organization
-            - Expense tracking and deductions
-            - Lead management and CRM
-            - Mileage tracking
-            - Tax preparation tips
-            - Productivity and efficiency
-            
-            Be helpful, friendly, and professional. Keep responses concise but informative. 
-            If you don't know something specific about the app, suggest they check the relevant section or contact support.`
-          },
-          {
-            role: "user",
-            content: message
-          }
-        ],
-        max_tokens: 500,
-        temperature: 0.7,
-      });
-      
-      response = completion.choices[0]?.message?.content || "I'm here to help!";
+      console.log('[Jessica] Using OpenAI for response');
+      try {
+        // Use OpenAI for intelligent responses
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content: `You are Jessica, an AI assistant for a 1099 contractor management app called 1099Suite. 
+              You help users with:
+              - Business management and organization
+              - Expense tracking and deductions
+              - Lead management and CRM
+              - Mileage tracking
+              - Tax preparation tips
+              - Productivity and efficiency
+              
+              Be helpful, friendly, and professional. Keep responses concise but informative. 
+              If you don't know something specific about the app, suggest they check the relevant section or contact support.`
+            },
+            {
+              role: "user",
+              content: message
+            }
+          ],
+          max_tokens: 500,
+          temperature: 0.7,
+        });
+        
+        response = completion.choices[0]?.message?.content || "I'm here to help!";
+        console.log('[Jessica] OpenAI response received');
+      } catch (openaiError) {
+        console.error('[Jessica] OpenAI error:', openaiError);
+        // Fall back to basic response if OpenAI fails
+        response = "I'm here to help! Let me provide some guidance on that.";
+      }
     } else {
+      console.log('[Jessica] Using fallback response (no OpenAI)');
       // Fallback responses if OpenAI is not configured
       const fallbackResponses = [
         "I understand you're asking about that. Let me help you with that.",
@@ -198,8 +208,9 @@ app.post('/api/jessica-chat-message', async (req, res) => {
     }
     
     // Simulate processing time
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 500));
     
+    console.log(`[Jessica] Sending response: ${response.substring(0, 50)}...`);
     res.json({
       response: response,
       timestamp: new Date().toISOString()
@@ -212,48 +223,58 @@ app.post('/api/jessica-chat-message', async (req, res) => {
 
 app.post('/api/jessica-chat-image', async (req, res) => {
   console.log('[Jessica] Received image message');
+  console.log(`[Jessica] OpenAI available: ${!!openai}, API Key: ${!!process.env.OPENAI_API_KEY}`);
   
   try {
     let response;
     
     if (openai && process.env.OPENAI_API_KEY) {
-      // Use OpenAI for image analysis
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: `You are Jessica, an AI assistant for a 1099 contractor management app. 
-            Analyze the image the user has shared and provide helpful insights related to:
-            - Business expenses and receipts
-            - Mileage tracking
-            - Tax deductions
-            - Business organization
-            - Productivity tips
-            
-            Be helpful and professional. If the image isn't business-related, politely redirect to business topics.`
-          },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: "Please analyze this image and provide business-related insights:" },
-              { type: "image_url", image_url: { url: req.body.imageUrl } }
-            ]
-          }
-        ],
-        max_tokens: 500,
-        temperature: 0.7,
-      });
-      
-      response = completion.choices[0]?.message?.content || "I can see the image you've shared. Let me help you with business insights!";
+      console.log('[Jessica] Using OpenAI for image analysis');
+      try {
+        // Use OpenAI for image analysis
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content: `You are Jessica, an AI assistant for a 1099 contractor management app. 
+              Analyze the image the user has shared and provide helpful insights related to:
+              - Business expenses and receipts
+              - Mileage tracking
+              - Tax deductions
+              - Business organization
+              - Productivity tips
+              
+              Be helpful and professional. If the image isn't business-related, politely redirect to business topics.`
+            },
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Please analyze this image and provide business-related insights:" },
+                { type: "image_url", image_url: { url: req.body.imageUrl } }
+              ]
+            }
+          ],
+          max_tokens: 500,
+          temperature: 0.7,
+        });
+        
+        response = completion.choices[0]?.message?.content || "I can see the image you've shared. Let me help you with business insights!";
+        console.log('[Jessica] OpenAI image analysis completed');
+      } catch (openaiError) {
+        console.error('[Jessica] OpenAI image analysis error:', openaiError);
+        response = "I can see the image you've shared. I'm still learning to process images, but I can help you with text-based questions about business management, expenses, and tax deductions!";
+      }
     } else {
+      console.log('[Jessica] Using fallback response for image (no OpenAI)');
       // Fallback response if OpenAI is not configured
       response = "I can see the image you've shared. I'm still learning to process images, but I can help you with text-based questions about business management, expenses, and tax deductions!";
     }
     
     // Simulate processing time
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise(resolve => setTimeout(resolve, 1000));
     
+    console.log(`[Jessica] Sending image response: ${response.substring(0, 50)}...`);
     res.json({
       response: response,
       timestamp: new Date().toISOString()
