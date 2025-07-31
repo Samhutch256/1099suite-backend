@@ -38,7 +38,9 @@ app.get('/api/health', (req, res) => {
 });
 
 // Supabase client
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY 
+  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+  : null;
 
 // Plaid client
 const plaidConfig = new Configuration({
@@ -103,7 +105,13 @@ app.post('/api/exchange-public-token', async (req, res) => {
   try {
     const tokenResponse = await plaidClient.itemPublicTokenExchange({ public_token });
     const accessToken = tokenResponse.data.access_token;
-    await supabase.from('plaid_tokens').upsert({ user_id, access_token: accessToken });
+    
+    if (supabase) {
+      await supabase.from('plaid_tokens').upsert({ user_id, access_token: accessToken });
+    } else {
+      console.warn('[Plaid] Supabase not configured, skipping token storage');
+    }
+    
     res.status(200).json({ access_token: accessToken, message: 'Access token stored successfully.' });
   } catch (error) {
     console.error('Exchange error:', error);
@@ -114,6 +122,11 @@ app.post('/api/exchange-public-token', async (req, res) => {
 // Plaid: Get Transactions
 app.get('/api/transactions', async (req, res) => {
   const { user_id, start_date, end_date } = req.query;
+  
+  if (!supabase) {
+    return res.status(503).json({ error: 'Database not configured. Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.' });
+  }
+  
   const { data, error } = await supabase
     .from('plaid_tokens')
     .select('access_token')
