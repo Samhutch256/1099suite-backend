@@ -321,6 +321,9 @@ Extract the following key-value pairs from the user's message. Only include fiel
 - "knocked 30 doors" → doorsKnocked: 30
 - "3 deals from inbound" → dealsClosedInbound: 3
 - "1 account derived from inbound" → accountsServicedInbound: 1
+- **"2 appointments from inbound calls" → appointments: 2, appointmentsSetInbound: 2**
+- **"3 deals from door knocks" → closedDeals: 3, dealsClosedDoorKnocks: 3**
+- **"1 account from referrals" → accountsServiced: 1, accountsServicedReferrals: 1**
 
 **Response Format:**
 If you can extract data, respond with PURE JSON only, no additional text:
@@ -783,6 +786,26 @@ If you cannot extract specific data, provide a natural, helpful response that gu
           if (accountsReferralMatch) {
             inputDataObj.accountsServiced = parseInt(accountsReferralMatch[1]);
             inputDataObj.accountsServicedReferrals = parseInt(accountsReferralMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        // Handle "X appointments from inbound calls" pattern
+        if (lowerMessage.includes('appointments') && lowerMessage.includes('from') && lowerMessage.includes('inbound') && lowerMessage.includes('calls')) {
+          const appointmentsInboundCallsMatch = message.match(/(\d+)\s+appointments?\s+from\s+inbound\s+calls/i);
+          if (appointmentsInboundCallsMatch) {
+            inputDataObj.appointments = parseInt(appointmentsInboundCallsMatch[1]);
+            inputDataObj.appointmentsSetInbound = parseInt(appointmentsInboundCallsMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        // Handle "X appointments from door knocks" pattern
+        if (lowerMessage.includes('appointments') && lowerMessage.includes('from') && lowerMessage.includes('door')) {
+          const appointmentsDoorMatch = message.match(/(\d+)\s+appointments?\s+from\s+door/i);
+          if (appointmentsDoorMatch) {
+            inputDataObj.appointments = parseInt(appointmentsDoorMatch[1]);
+            inputDataObj.appointmentsSetDoorKnocks = parseInt(appointmentsDoorMatch[1]);
             hasData = true;
           }
         }
