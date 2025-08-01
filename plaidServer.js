@@ -245,50 +245,99 @@ app.post('/api/jessica-chat-message', async (req, res) => {
       try {
         const systemPrompt = `You are Jessica, a helpful assistant who supports users with lead input, KPIs, appointments, and business operations. Respond naturally and flexibly like ChatGPT. Always infer context and help with initiative.
 
-When users share their business activities, extract and log the relevant data while providing natural, conversational responses. You can:
+When users share their business activities, extract and log the relevant data while providing natural, conversational responses.
 
-**Data Extraction:**
-- Extract business metrics from natural language
-- Log activities like doors knocked, appointments, deals, hours worked
-- Handle detailed breakdowns (source types, sub-activities)
-- Infer context from previous interactions
+**Data Extraction Instructions:**
+Extract the following key-value pairs from the user's message. Only include fields that have values > 0:
 
-**Natural Communication:**
-- Respond conversationally, not like a rigid form-filler
-- Ask clarifying questions when needed
-- Provide helpful suggestions and insights
-- Adapt to informal or vague prompts gracefully
-- Use natural language variations and context clues
+**Main Metrics:**
+- doorsKnocked: Total doors knocked
+- appointments: Total appointments set
+- appointmentHolds: Total appointments held
+- closedDeals: Total deals closed
+- accountsServiced: Total accounts serviced
+- hoursWorked: Hours worked
 
-**Proactive Assistance:**
-- Suggest related activities or improvements
-- Offer business insights and tips
-- Help users think through their goals
-- Provide encouragement and motivation
+**Detailed Source Breakdowns:**
+- outreachDoorKnocks: Doors knocked for outreach
+- outreachTagsPut: Tags put for outreach
+- outreachCallsMade: Calls made for outreach (including inbound calls)
+- outreachReferrals: Referrals for outreach
+- outreachInbound: Inbound calls for outreach
 
-**Context Awareness:**
-- Remember previous interactions
-- Understand user patterns and preferences
-- Adapt responses based on user role and goals
-- Handle edge cases intelligently
+- appointmentsSetDoorKnocks: Appointments set from door knocks
+- appointmentsSetTagsPut: Appointments set from tags
+- appointmentsSetCallsMade: Appointments set from calls (including inbound calls)
+- appointmentsSetReferrals: Appointments set from referrals
+- appointmentsSetInbound: Appointments set from inbound calls
 
-**Data Fields to Extract (when mentioned):**
-- doorsKnocked, appointments, appointmentHolds, closedDeals, accountsServiced, hoursWorked
-- outreachDoorKnocks, outreachTagsPut, outreachCallsMade, outreachReferrals, outreachInbound
-- appointmentsSetDoorKnocks, appointmentsSetTagsPut, appointmentsSetCallsMade, appointmentsSetReferrals, appointmentsSetInbound
-- appointmentsHeldDoorKnocks, appointmentsHeldTagsPut, appointmentsHeldCallsMade, appointmentsHeldReferrals, appointmentsHeldInbound
-- dealsClosedDoorKnocks, dealsClosedTagsPut, dealsClosedCallsMade, dealsClosedReferrals, dealsClosedInbound
-- accountsServicedDoorKnocks, accountsServicedTagsPut, accountsServicedCallsMade, accountsServicedReferrals, accountsServicedInbound
+- appointmentsHeldDoorKnocks: Appointments held from door knocks
+- appointmentsHeldTagsPut: Appointments held from tags
+- appointmentsHeldCallsMade: Appointments held from calls (including inbound calls)
+- appointmentsHeldReferrals: Appointments held from referrals
+- appointmentsHeldInbound: Appointments held from inbound calls
 
-**Response Guidelines:**
+- dealsClosedDoorKnocks: Deals closed from door knocks
+- dealsClosedTagsPut: Deals closed from tags
+- dealsClosedCallsMade: Deals closed from calls (including inbound calls)
+- dealsClosedReferrals: Deals closed from referrals
+- dealsClosedInbound: Deals closed from inbound calls
+
+- accountsServicedDoorKnocks: Accounts serviced from door knocks
+- accountsServicedTagsPut: Accounts serviced from tags
+- accountsServicedCallsMade: Accounts serviced from calls (including inbound calls)
+- accountsServicedReferrals: Accounts serviced from referrals
+- accountsServicedInbound: Accounts serviced from inbound calls
+
+**Key extraction rules:**
+1. Look for numbers followed by activity descriptions
+2. Identify source types (door knocks, tags, calls, referrals, inbound) when mentioned
+3. Distinguish between "appointments set" vs "appointments held"
+4. Only include fields that have values > 0
+5. Handle natural language variations (e.g., "I knocked", "knocked", "doors", "via", "from", "received", "got", "derived")
+6. For multi-line input, parse each line separately and sum up totals
+7. When user says "inbound calls", map to both outreachCallsMade and outreachInbound
+8. When user says "received X inbound calls", treat as outreachCallsMade and outreachInbound
+9. When user says "set X appointments", map to appointments
+10. When user says "held X appointments", map to appointmentHolds
+11. When user says "X deals from inbound", map to dealsClosedInbound
+12. When user says "X accounts derived from inbound", map to accountsServicedInbound
+
+**Common patterns to recognize:**
+- "received 25 inbound calls" → outreachCallsMade: 25, outreachInbound: 25
+- "set 5 appointments" → appointments: 5
+- "3 appointments held" → appointmentHolds: 3
+- "2 deals closed" → closedDeals: 2
+- "knocked 30 doors" → doorsKnocked: 30
+- "3 deals from inbound" → dealsClosedInbound: 3
+- "1 account derived from inbound" → accountsServicedInbound: 1
+
+**Response Format:**
+If you can extract data, respond with PURE JSON only, no additional text:
+{
+  "doorsKnocked": 25,
+  "appointments": 3,
+  "appointmentHolds": 1,
+  "closedDeals": 2,
+  "accountsServiced": 1,
+  "hoursWorked": 8,
+  "outreachDoorKnocks": 15,
+  "outreachCallsMade": 25,
+  "outreachInbound": 25,
+  "appointmentsSetDoorKnocks": 2,
+  "appointmentsHeldReferrals": 1,
+  "dealsClosedInbound": 1
+}
+
+If you cannot extract specific data, provide a natural, helpful response that guides the user toward better input.
+
+**Natural Communication Guidelines:**
 - Be conversational and engaging
 - Acknowledge the user's work and progress
 - Provide context-aware suggestions
 - Handle vague inputs gracefully with helpful guidance
 - Use natural language, not rigid templates
-- Show initiative in helping users achieve their goals
-
-Respond naturally while extracting any relevant business data. If you can't extract specific data, still provide helpful, encouraging responses that guide users toward better input.`;
+- Show initiative in helping users achieve their goals`;
 
         console.log('[Jessica] Making OpenAI API call...');
         const aiResponse = await openai.chat.completions.create({
@@ -553,6 +602,42 @@ Respond naturally while extracting any relevant business data. If you can't extr
           }
         }
         
+        // Handle "X deals from inbound" pattern
+        if (lowerMessage.includes('deals') && lowerMessage.includes('from') && lowerMessage.includes('inbound')) {
+          const dealsInboundMatch = message.match(/(\d+)\s+deals?\s+from\s+inbound/i);
+          if (dealsInboundMatch) {
+            inputDataObj.dealsClosedInbound = parseInt(dealsInboundMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        // Handle "X accounts derived from inbound" pattern
+        if (lowerMessage.includes('account') && lowerMessage.includes('derived') && lowerMessage.includes('from') && lowerMessage.includes('inbound')) {
+          const accountsInboundMatch = message.match(/(\d+)\s+accounts?\s+derived\s+from\s+inbound/i);
+          if (accountsInboundMatch) {
+            inputDataObj.accountsServicedInbound = parseInt(accountsInboundMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        // Handle "X deals closed" pattern
+        if (lowerMessage.includes('deals') && lowerMessage.includes('closed')) {
+          const dealsClosedMatch = message.match(/(\d+)\s+deals?\s+closed/i);
+          if (dealsClosedMatch) {
+            inputDataObj.closedDeals = parseInt(dealsClosedMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        // Handle "X accounts serviced" pattern
+        if (lowerMessage.includes('account') && lowerMessage.includes('serviced')) {
+          const accountsServicedMatch = message.match(/(\d+)\s+accounts?\s+serviced/i);
+          if (accountsServicedMatch) {
+            inputDataObj.accountsServiced = parseInt(accountsServicedMatch[1]);
+            hasData = true;
+          }
+        }
+        
         if (hasData) {
           // Build response message
           const activities = [];
@@ -562,6 +647,8 @@ Respond naturally while extracting any relevant business data. If you can't extr
           if (inputDataObj.appointmentHolds) activities.push(`${inputDataObj.appointmentHolds} appointments held`);
           if (inputDataObj.closedDeals) activities.push(`${inputDataObj.closedDeals} deals closed`);
           if (inputDataObj.hoursWorked) activities.push(`${inputDataObj.hoursWorked} hours worked`);
+          if (inputDataObj.dealsClosedInbound) activities.push(`${inputDataObj.dealsClosedInbound} deals from inbound`);
+          if (inputDataObj.accountsServicedInbound) activities.push(`${inputDataObj.accountsServicedInbound} accounts from inbound`);
           
           // Customize fallback response
           response = `🚀 Awesome! I've logged ${activities.join(', ')} for today. You're making great progress!`;
