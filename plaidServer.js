@@ -212,6 +212,7 @@ app.post('/api/jessica-chat-message', async (req, res) => {
       hasMultipleNumbers || 
       lowerMessage.includes('from') || 
       lowerMessage.includes('via') ||
+      lowerMessage.includes('under') ||
       lowerMessage.includes('inbound') ||
       lowerMessage.includes('outreach') ||
       lowerMessage.includes('appointments') ||
