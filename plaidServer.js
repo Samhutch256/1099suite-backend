@@ -34,9 +34,44 @@ const openai = process.env.OPENAI_API_KEY ? new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 }) : null;
 
+// Log OpenAI initialization
+console.log('[Jessica] OpenAI initialization:', {
+  hasAPIKey: !!process.env.OPENAI_API_KEY,
+  hasClient: !!openai,
+  apiKeyLength: process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.length : 0
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Backend is running!' });
+});
+
+// Test OpenAI endpoint
+app.get('/api/test-openai', async (req, res) => {
+  if (!openai) {
+    return res.json({ error: 'OpenAI not available' });
+  }
+  
+  try {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'user', content: 'Say "Hello, OpenAI is working!"' }
+      ],
+      max_tokens: 50
+    });
+    
+    res.json({ 
+      success: true, 
+      response: response.choices[0]?.message?.content,
+      model: 'gpt-4o'
+    });
+  } catch (error) {
+    res.json({ 
+      error: 'OpenAI API call failed', 
+      details: error.message 
+    });
+  }
 });
 
 // Supabase client
@@ -159,29 +194,406 @@ app.post('/api/jessica-chat-message', async (req, res) => {
     let response;
     const lowerMessage = message.toLowerCase();
     
-    // Check for input commands first
-    if (lowerMessage.includes('add') || lowerMessage.includes('log') || lowerMessage.includes('record')) {
-      if (lowerMessage.includes('door') || lowerMessage.includes('knock')) {
-        response = "I can help you log doors knocked! Just tell me how many doors you knocked today, like 'I knocked 25 doors today' or 'Add 25 doors'.";
-      } else if (lowerMessage.includes('appointment')) {
-        response = "I can help you log appointments! Just tell me how many appointments you set today, like 'I set 3 appointments today' or 'Add 3 appointments'.";
-      } else if (lowerMessage.includes('deal') || lowerMessage.includes('close')) {
-        response = "I can help you log closed deals! Just tell me how many deals you closed today, like 'I closed 2 deals today' or 'Add 2 deals'.";
-      } else if (lowerMessage.includes('mileage') || lowerMessage.includes('trip')) {
-        response = "I can help you log mileage trips! Just tell me the details like 'Add 15 miles for client meeting' or 'Log 20 miles business trip'.";
-      } else if (lowerMessage.includes('expense') || lowerMessage.includes('cost')) {
-        response = "I can help you log expenses! Just tell me the amount and description like 'Add $50 expense for gas' or 'Log $25 for lunch'.";
-      } else if (lowerMessage.includes('lead') || lowerMessage.includes('client')) {
-        response = "I can help you add leads! Just tell me the name and company like 'Add lead John Smith from ABC Corp' or 'Log new client Jane Doe'.";
-      } else if (lowerMessage.includes('team') || lowerMessage.includes('member')) {
-        response = "I can help you add team members! Just tell me the name and role like 'Add team member Mike as Sales Rep' or 'Log new member Sarah'.";
-      } else {
-        response = "I can help you log data! Try saying things like:\n• 'Add 25 doors knocked'\n• 'Log 3 appointments'\n• 'Add $50 expense for gas'\n• 'Add lead John Smith'\n• 'Log 15 miles for client meeting'";
+    console.log('[Jessica] Starting message processing for:', message.substring(0, 50) + '...');
+    
+    // Check if message contains 2 or more numbers - this is the primary trigger for AI
+    const numbers = message.match(/\d+/g);
+    const hasMultipleNumbers = numbers && numbers.length >= 2;
+    
+    console.log('[Jessica] Number analysis:', {
+      numbersFound: numbers,
+      hasMultipleNumbers,
+      messageLength: message.length,
+      message: message.substring(0, 100) + '...'
+    });
+    
+    // Force AI for any message with 2+ numbers or complex input patterns
+    const forceAI = openai && (
+      hasMultipleNumbers || 
+      lowerMessage.includes('from') || 
+      lowerMessage.includes('via') ||
+      lowerMessage.includes('inbound') ||
+      lowerMessage.includes('outreach') ||
+      lowerMessage.includes('appointments') ||
+      lowerMessage.includes('deals') ||
+      lowerMessage.includes('calls') ||
+      lowerMessage.includes('held') ||
+      lowerMessage.includes('set') ||
+      lowerMessage.includes('closed') ||
+      lowerMessage.includes('serviced') ||
+      lowerMessage.includes('accounts') ||
+      lowerMessage.includes('doors') ||
+      lowerMessage.includes('knocked')
+    );
+    
+    console.log('[Jessica] AI trigger check:', {
+      hasOpenAI: !!openai,
+      hasMultipleNumbers,
+      forceAI,
+      messagePreview: message.substring(0, 50)
+    });
+    
+    if (forceAI) {
+      console.log('[Jessica] Using AI for complex message analysis');
+      console.log('[Jessica] Trigger details:', {
+        openai: !!openai,
+        hasMultipleNumbers,
+        numbersFound: numbers,
+        messageLength: message.length
+      });
+      
+      try {
+        const systemPrompt = `You are Jessica, an AI assistant for a 1099 contractor management app. Analyze the user's message and extract specific business activities with detailed source breakdowns.
+
+Extract the following key-value pairs from the user's message. Only include fields that have values > 0:
+
+**Main Metrics:**
+- doorsKnocked: Total doors knocked
+- appointments: Total appointments set
+- appointmentHolds: Total appointments held
+- closedDeals: Total deals closed
+- accountsServiced: Total accounts serviced
+- hoursWorked: Hours worked
+
+**Detailed Source Breakdowns:**
+- outreachDoorKnocks: Doors knocked for outreach
+- outreachTagsPut: Tags put for outreach
+- outreachCallsMade: Calls made for outreach (including inbound calls)
+- outreachReferrals: Referrals for outreach
+- outreachInbound: Inbound calls for outreach
+
+- appointmentsSetDoorKnocks: Appointments set from door knocks
+- appointmentsSetTagsPut: Appointments set from tags
+- appointmentsSetCallsMade: Appointments set from calls (including inbound calls)
+- appointmentsSetReferrals: Appointments set from referrals
+- appointmentsSetInbound: Appointments set from inbound calls
+
+- appointmentsHeldDoorKnocks: Appointments held from door knocks
+- appointmentsHeldTagsPut: Appointments held from tags
+- appointmentsHeldCallsMade: Appointments held from calls (including inbound calls)
+- appointmentsHeldReferrals: Appointments held from referrals
+- appointmentsHeldInbound: Appointments held from inbound calls
+
+- dealsClosedDoorKnocks: Deals closed from door knocks
+- dealsClosedTagsPut: Deals closed from tags
+- dealsClosedCallsMade: Deals closed from calls (including inbound calls)
+- dealsClosedReferrals: Deals closed from referrals
+- dealsClosedInbound: Deals closed from inbound calls
+
+- accountsServicedDoorKnocks: Accounts serviced from door knocks
+- accountsServicedTagsPut: Accounts serviced from tags
+- accountsServicedCallsMade: Accounts serviced from calls (including inbound calls)
+- accountsServicedReferrals: Accounts serviced from referrals
+- accountsServicedInbound: Accounts serviced from inbound calls
+
+**Key extraction rules:**
+1. Look for numbers followed by activity descriptions
+2. Identify source types (door knocks, tags, calls, referrals, inbound) when mentioned
+3. Distinguish between "appointments set" vs "appointments held"
+4. Only include fields that have values > 0
+5. Handle natural language variations (e.g., "I knocked", "knocked", "doors", "via", "from", "received", "got")
+6. For multi-line input, parse each line separately and sum up totals
+7. When user says "inbound calls", map to both outreachCallsMade and outreachInbound
+8. When user says "received X inbound calls", treat as outreachCallsMade and outreachInbound
+9. When user says "set X appointments", map to appointments
+10. When user says "held X appointments", map to appointmentHolds
+
+**Common patterns to recognize:**
+- "received 25 inbound calls" → outreachCallsMade: 25, outreachInbound: 25
+- "set 5 appointments" → appointments: 5
+- "3 appointments held" → appointmentHolds: 3
+- "2 deals closed" → closedDeals: 2
+- "knocked 30 doors" → doorsKnocked: 30
+
+Respond with PURE JSON only, no additional text:
+{
+  "doorsKnocked": 25,
+  "appointments": 3,
+  "appointmentHolds": 1,
+  "closedDeals": 2,
+  "accountsServiced": 1,
+  "hoursWorked": 8,
+  "outreachDoorKnocks": 15,
+  "outreachCallsMade": 25,
+  "outreachInbound": 25,
+  "appointmentsSetDoorKnocks": 2,
+  "appointmentsHeldReferrals": 1,
+  "dealsClosedInbound": 1
+}
+
+Example:
+Input: "I received 25 inbound calls, set 5 appointments, 3 appointments held, and 2 deals closed today"
+Output: {
+  "outreachCallsMade": 25,
+  "outreachInbound": 25,
+  "appointments": 5,
+  "appointmentHolds": 3,
+  "closedDeals": 2
+}`;
+
+        console.log('[Jessica] Making OpenAI API call...');
+        const aiResponse = await openai.chat.completions.create({
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: message }
+          ],
+          max_tokens: 1000,
+          temperature: 0.1
+        });
+
+        const aiContent = aiResponse.choices[0]?.message?.content;
+        console.log('[Jessica] OpenAI API call successful');
+        console.log('[Jessica] Raw AI response:', aiContent);
+
+        if (aiContent) {
+          try {
+            const extractedData = JSON.parse(aiContent);
+            console.log('[Jessica] Parsed AI response:', extractedData);
+
+            // Ensure all required fields are present with defaults
+            const completeData = {
+              doorsKnocked: 0,
+              appointments: 0,
+              appointmentHolds: 0,
+              closedDeals: 0,
+              accountsServiced: 0,
+              hoursWorked: 0,
+              notes: '',
+              // Sub-inputs with defaults
+              outreachDoorKnocks: 0,
+              outreachTagsPut: 0,
+              outreachCallsMade: 0,
+              outreachReferrals: 0,
+              outreachInbound: 0,
+              appointmentsSetDoorKnocks: 0,
+              appointmentsSetTagsPut: 0,
+              appointmentsSetCallsMade: 0,
+              appointmentsSetReferrals: 0,
+              appointmentsSetInbound: 0,
+              appointmentsHeldDoorKnocks: 0,
+              appointmentsHeldTagsPut: 0,
+              appointmentsHeldCallsMade: 0,
+              appointmentsHeldReferrals: 0,
+              appointmentsHeldInbound: 0,
+              dealsClosedDoorKnocks: 0,
+              dealsClosedTagsPut: 0,
+              dealsClosedCallsMade: 0,
+              dealsClosedReferrals: 0,
+              dealsClosedInbound: 0,
+              accountsServicedDoorKnocks: 0,
+              accountsServicedTagsPut: 0,
+              accountsServicedCallsMade: 0,
+              accountsServicedReferrals: 0,
+              accountsServicedInbound: 0,
+              ...extractedData
+            };
+
+            if (supabase && userId) {
+              console.log('[Jessica] Saving to Supabase for user:', userId);
+              const today = new Date().toISOString().split('T')[0];
+              
+              // Check for existing data
+              const { data: existingData, error: fetchError } = await supabase
+                .from('daily_inputs')
+                .select('*')
+                .eq('user_id', userId)
+                .eq('date', today)
+                .single();
+
+              if (fetchError && fetchError.code !== 'PGRST116') {
+                console.error('[Jessica] Error fetching existing data:', fetchError);
+              }
+
+              // Prepare upsert data with proper field mapping
+              const upsertData = {
+                user_id: userId,
+                date: today,
+                doors_knocked: completeData.doorsKnocked,
+                appointments: completeData.appointments,
+                appointment_holds: completeData.appointmentHolds,
+                closed_deals: completeData.closedDeals,
+                accounts_serviced: completeData.accountsServiced,
+                hours_worked: completeData.hoursWorked,
+                notes: completeData.notes,
+                // Sub-input fields
+                outreach_door_knocks: completeData.outreachDoorKnocks,
+                outreach_tags_put: completeData.outreachTagsPut,
+                outreach_calls_made: completeData.outreachCallsMade,
+                outreach_referrals: completeData.outreachReferrals,
+                outreach_inbound: completeData.outreachInbound,
+                appointments_set_door_knocks: completeData.appointmentsSetDoorKnocks,
+                appointments_set_tags_put: completeData.appointmentsSetTagsPut,
+                appointments_set_calls_made: completeData.appointmentsSetCallsMade,
+                appointments_set_referrals: completeData.appointmentsSetReferrals,
+                appointments_set_inbound: completeData.appointmentsSetInbound,
+                appointments_held_door_knocks: completeData.appointmentsHeldDoorKnocks,
+                appointments_held_tags_put: completeData.appointmentsHeldTagsPut,
+                appointments_held_calls_made: completeData.appointmentsHeldCallsMade,
+                appointments_held_referrals: completeData.appointmentsHeldReferrals,
+                appointments_held_inbound: completeData.appointmentsHeldInbound,
+                deals_closed_door_knocks: completeData.dealsClosedDoorKnocks,
+                deals_closed_tags_put: completeData.dealsClosedTagsPut,
+                deals_closed_calls_made: completeData.dealsClosedCallsMade,
+                deals_closed_referrals: completeData.dealsClosedReferrals,
+                deals_closed_inbound: completeData.dealsClosedInbound,
+                accounts_serviced_door_knocks: completeData.accountsServicedDoorKnocks,
+                accounts_serviced_tags_put: completeData.accountsServicedTagsPut,
+                accounts_serviced_calls_made: completeData.accountsServicedCallsMade,
+                accounts_serviced_referrals: completeData.accountsServicedReferrals,
+                accounts_serviced_inbound: completeData.accountsServicedInbound,
+              };
+
+              // If existing data, merge the values
+              if (existingData) {
+                console.log('[Jessica] Merging with existing data');
+                Object.keys(completeData).forEach(key => {
+                  if (completeData[key] > 0) {
+                    const dbKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+                    if (upsertData[dbKey] !== undefined) {
+                      upsertData[dbKey] = (existingData[dbKey] || 0) + completeData[key];
+                    }
+                  }
+                });
+              }
+
+              const { data: saveData, error: saveError } = await supabase
+                .from('daily_inputs')
+                .upsert(upsertData, { onConflict: 'user_id,date' });
+
+              if (saveError) {
+                console.error('[Jessica] Error saving to Supabase:', saveError);
+              } else {
+                console.log('[Jessica] Successfully saved to Supabase:', saveData);
+              }
+            }
+
+            // Build response message
+            const activities = [];
+            if (completeData.doorsKnocked > 0) activities.push(`${completeData.doorsKnocked} doors knocked`);
+            if (completeData.appointments > 0) activities.push(`${completeData.appointments} appointments set`);
+            if (completeData.appointmentHolds > 0) activities.push(`${completeData.appointmentHolds} appointments held`);
+            if (completeData.closedDeals > 0) activities.push(`${completeData.closedDeals} deals closed`);
+            if (completeData.accountsServiced > 0) activities.push(`${completeData.accountsServiced} accounts serviced`);
+            if (completeData.hoursWorked > 0) activities.push(`${completeData.hoursWorked} hours worked`);
+
+            response = `✅ I logged ${activities.join(', ')} with detailed source breakdowns.`;
+
+            res.json({
+              response: response,
+              extractedData: completeData,
+              shouldSave: true,
+              timestamp: new Date().toISOString()
+            });
+            return;
+
+          } catch (parseError) {
+            console.log('[Jessica] Failed to parse AI response as JSON:', parseError);
+            console.log('[Jessica] Raw AI content:', aiContent);
+            response = "I understand your message, but I couldn't extract specific data to log. Could you try being more specific with numbers and activities?";
+          }
+        } else {
+          throw new Error('No AI response received');
+        }
+      } catch (aiError) {
+        console.error('[Jessica] AI analysis failed:', aiError);
+        console.log('[Jessica] Falling back to simple processing');
       }
-    } else if (lowerMessage.includes('i knocked') || lowerMessage.includes('i set') || lowerMessage.includes('i closed') || lowerMessage.includes('i worked')) {
-      // Extract numbers from natural language
+    } else {
+      console.log('[Jessica] AI analysis not triggered. Conditions:', {
+        hasOpenAI: !!openai,
+        hasMultipleNumbers,
+        messageLength: message.length
+      });
+    }
+    
+    // Simple fallback for basic messages (single number only)
+    if (!response) {
+      console.log('[Jessica] Using simple fallback for basic message');
+      
+      // Enhanced fallback processing for complex inputs
       const numbers = message.match(/\d+/g);
-      if (numbers && numbers.length > 0) {
+      const lowerMessage = message.toLowerCase();
+      
+      if (numbers && numbers.length >= 1) {
+        const inputDataObj = {};
+        let hasData = false;
+        
+        // Parse complex inputs like "received 25 inbound calls, set 5 appointments, 3 appointments held, and 2 deals closed"
+        if (lowerMessage.includes('received') && lowerMessage.includes('inbound') && lowerMessage.includes('calls')) {
+          const inboundMatch = message.match(/received\s+(\d+)\s+inbound\s+calls/i);
+          if (inboundMatch) {
+            const count = parseInt(inboundMatch[1]);
+            inputDataObj.outreachCallsMade = count;
+            inputDataObj.outreachInbound = count;
+            hasData = true;
+          }
+        }
+        
+        if (lowerMessage.includes('set') && lowerMessage.includes('appointments')) {
+          const setMatch = message.match(/set\s+(\d+)\s+appointments/i);
+          if (setMatch) {
+            inputDataObj.appointments = parseInt(setMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        if (lowerMessage.includes('appointments') && lowerMessage.includes('held')) {
+          const heldMatch = message.match(/(\d+)\s+appointments?\s+held/i);
+          if (heldMatch) {
+            inputDataObj.appointmentHolds = parseInt(heldMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        if (lowerMessage.includes('deals') && lowerMessage.includes('closed')) {
+          const dealsMatch = message.match(/(\d+)\s+deals?\s+closed/i);
+          if (dealsMatch) {
+            inputDataObj.closedDeals = parseInt(dealsMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        if (lowerMessage.includes('knocked') || lowerMessage.includes('door')) {
+          const doorsMatch = message.match(/(\d+)\s+doors?/i) || message.match(/knocked\s+(\d+)/i);
+          if (doorsMatch) {
+            inputDataObj.doorsKnocked = parseInt(doorsMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        if (lowerMessage.includes('hour') || lowerMessage.includes('worked')) {
+          const hoursMatch = message.match(/(\d+)\s+hours?/i) || message.match(/worked\s+(\d+)/i);
+          if (hoursMatch) {
+            inputDataObj.hoursWorked = parseInt(hoursMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        if (hasData) {
+          // Build response message
+          const activities = [];
+          if (inputDataObj.doorsKnocked) activities.push(`${inputDataObj.doorsKnocked} doors knocked`);
+          if (inputDataObj.outreachCallsMade) activities.push(`${inputDataObj.outreachCallsMade} inbound calls`);
+          if (inputDataObj.appointments) activities.push(`${inputDataObj.appointments} appointments set`);
+          if (inputDataObj.appointmentHolds) activities.push(`${inputDataObj.appointmentHolds} appointments held`);
+          if (inputDataObj.closedDeals) activities.push(`${inputDataObj.closedDeals} deals closed`);
+          if (inputDataObj.hoursWorked) activities.push(`${inputDataObj.hoursWorked} hours worked`);
+          
+          response = `✅ I logged ${activities.join(', ')} for today.`;
+          
+          res.json({
+            response: response,
+            extractedData: inputDataObj,
+            shouldSave: true,
+            timestamp: new Date().toISOString()
+          });
+          return;
+        }
+      }
+      
+      // Only handle simple messages with exactly ONE number if no complex parsing worked
+      if (numbers && numbers.length === 1) {
         const count = parseInt(numbers[0]);
         if (lowerMessage.includes('knocked') || lowerMessage.includes('door')) {
           response = `I'll log ${count} doors knocked for today. You can also tell me appointments, deals, or hours worked!`;
@@ -192,277 +604,13 @@ app.post('/api/jessica-chat-message', async (req, res) => {
         } else if (lowerMessage.includes('hour') || lowerMessage.includes('worked')) {
           response = `I'll log ${count} hours worked for today. Keep it up!`;
         }
-      } else {
-        response = "I heard you mention some activity, but I couldn't catch the numbers. Try saying something like 'I knocked 25 doors today' or 'I set 3 appointments'.";
       }
-    } else if (lowerMessage.includes('\n') || lowerMessage.includes('•') || lowerMessage.includes('-') || lowerMessage.includes('*')) {
-      // Handle multi-line input with multiple activities
-      const lines = message.split(/[\n•\-*]/).filter(line => line.trim().length > 0);
-      if (lines.length > 1) {
-        const activities = [];
-        let totalDoors = 0;
-        let totalAppointments = 0;
-        let totalDeals = 0;
-        let totalAccounts = 0;
-        
-        for (const line of lines) {
-          const trimmedLine = line.trim().toLowerCase();
-          const numbers = trimmedLine.match(/\d+/g);
-          if (numbers && numbers.length > 0) {
-            const count = parseInt(numbers[0]);
-            
-            if (trimmedLine.includes('appointment') && trimmedLine.includes('set')) {
-              totalAppointments += count;
-              if (trimmedLine.includes('door')) activities.push(`${count} appointments from door knocks`);
-              else if (trimmedLine.includes('tag')) activities.push(`${count} appointments from tags`);
-              else if (trimmedLine.includes('call')) activities.push(`${count} appointments from calls`);
-              else if (trimmedLine.includes('referral')) activities.push(`${count} appointments from referrals`);
-              else if (trimmedLine.includes('inbound')) activities.push(`${count} appointments from inbound`);
-            } else if (trimmedLine.includes('appointment') && trimmedLine.includes('held')) {
-              if (trimmedLine.includes('door')) activities.push(`${count} appointments held from door knocks`);
-              else if (trimmedLine.includes('tag')) activities.push(`${count} appointments held from tags`);
-              else if (trimmedLine.includes('call')) activities.push(`${count} appointments held from calls`);
-              else if (trimmedLine.includes('referral')) activities.push(`${count} appointments held from referrals`);
-              else if (trimmedLine.includes('inbound')) activities.push(`${count} appointments held from inbound`);
-            } else if (trimmedLine.includes('deal') || trimmedLine.includes('closed')) {
-              totalDeals += count;
-              if (trimmedLine.includes('door')) activities.push(`${count} deals from door knocks`);
-              else if (trimmedLine.includes('tag')) activities.push(`${count} deals from tags`);
-              else if (trimmedLine.includes('call')) activities.push(`${count} deals from calls`);
-              else if (trimmedLine.includes('referral')) activities.push(`${count} deals from referrals`);
-              else if (trimmedLine.includes('inbound')) activities.push(`${count} deals from inbound`);
-            } else if (trimmedLine.includes('account') || trimmedLine.includes('serviced')) {
-              totalAccounts += count;
-              if (trimmedLine.includes('door')) activities.push(`${count} accounts from door knocks`);
-              else if (trimmedLine.includes('tag')) activities.push(`${count} accounts from tags`);
-              else if (trimmedLine.includes('call')) activities.push(`${count} accounts from calls`);
-              else if (trimmedLine.includes('referral')) activities.push(`${count} accounts from referrals`);
-              else if (trimmedLine.includes('inbound')) activities.push(`${count} accounts from inbound`);
-            } else if (trimmedLine.includes('knocked') || trimmedLine.includes('door')) {
-              totalDoors += count;
-              activities.push(`${count} doors knocked`);
-            }
-          }
-        }
-        
-        if (activities.length > 0) {
-          const summary = [];
-          if (totalDoors > 0) summary.push(`${totalDoors} doors knocked`);
-          if (totalAppointments > 0) summary.push(`${totalAppointments} appointments set`);
-          if (totalDeals > 0) summary.push(`${totalDeals} deals closed`);
-          if (totalAccounts > 0) summary.push(`${totalAccounts} accounts serviced`);
-          
-          response = `I'll log all your activities for today:\n• ${activities.join('\n• ')}\n\nSummary: ${summary.join(', ')}. Excellent detailed tracking!`;
-        } else {
-          response = "I see you've listed multiple activities, but I couldn't parse the specific numbers. Try formatting like:\n• 8 appointments from door knocks\n• 5 deals from inbound calls\n• 3 appointments held from referrals";
-        }
-      } else {
-        response = "I see you've provided multiple activities. I'll process each one and log them all for today!";
-      }
-    } else if (lowerMessage.includes('from') && (lowerMessage.includes('door') || lowerMessage.includes('tag') || lowerMessage.includes('call') || lowerMessage.includes('referral') || lowerMessage.includes('inbound'))) {
-      // Handle detailed sub-inputs like "8 appointments from door knocks" or "5 deals from inbound calls"
-      const numbers = message.match(/\d+/g);
-      if (numbers && numbers.length > 0) {
-        const count = parseInt(numbers[0]);
-        let subInputType = '';
-        let mainInputType = '';
-        
-        // Check for "appointments held" first to avoid confusion with "appointments"
-        if (lowerMessage.includes('appointment') && lowerMessage.includes('held')) {
-          mainInputType = 'appointmentHolds';
-          if (lowerMessage.includes('door')) subInputType = 'appointmentsHeldDoorKnocks';
-          else if (lowerMessage.includes('tag')) subInputType = 'appointmentsHeldTagsPut';
-          else if (lowerMessage.includes('call')) subInputType = 'appointmentsHeldCallsMade';
-          else if (lowerMessage.includes('referral')) subInputType = 'appointmentsHeldReferrals';
-          else if (lowerMessage.includes('inbound')) subInputType = 'appointmentsHeldInbound';
-        } else if (lowerMessage.includes('appointment') && lowerMessage.includes('set')) {
-          mainInputType = 'appointments';
-          if (lowerMessage.includes('door')) subInputType = 'appointmentsSetDoorKnocks';
-          else if (lowerMessage.includes('tag')) subInputType = 'appointmentsSetTagsPut';
-          else if (lowerMessage.includes('call')) subInputType = 'appointmentsSetCallsMade';
-          else if (lowerMessage.includes('referral')) subInputType = 'appointmentsSetReferrals';
-          else if (lowerMessage.includes('inbound')) subInputType = 'appointmentsSetInbound';
-        } else if (lowerMessage.includes('appointment')) {
-          // Default to appointments if not specified as set or held
-          mainInputType = 'appointments';
-          if (lowerMessage.includes('door')) subInputType = 'appointmentsSetDoorKnocks';
-          else if (lowerMessage.includes('tag')) subInputType = 'appointmentsSetTagsPut';
-          else if (lowerMessage.includes('call')) subInputType = 'appointmentsSetCallsMade';
-          else if (lowerMessage.includes('referral')) subInputType = 'appointmentsSetReferrals';
-          else if (lowerMessage.includes('inbound')) subInputType = 'appointmentsSetInbound';
-        } else if (lowerMessage.includes('deal') || lowerMessage.includes('closed')) {
-          mainInputType = 'closedDeals';
-          if (lowerMessage.includes('door')) subInputType = 'dealsClosedDoorKnocks';
-          else if (lowerMessage.includes('tag')) subInputType = 'dealsClosedTagsPut';
-          else if (lowerMessage.includes('call')) subInputType = 'dealsClosedCallsMade';
-          else if (lowerMessage.includes('referral')) subInputType = 'dealsClosedReferrals';
-          else if (lowerMessage.includes('inbound')) subInputType = 'dealsClosedInbound';
-        } else if (lowerMessage.includes('account') || lowerMessage.includes('serviced')) {
-          mainInputType = 'accountsServiced';
-          if (lowerMessage.includes('door')) subInputType = 'accountsServicedDoorKnocks';
-          else if (lowerMessage.includes('tag')) subInputType = 'accountsServicedTagsPut';
-          else if (lowerMessage.includes('call')) subInputType = 'accountsServicedCallsMade';
-          else if (lowerMessage.includes('referral')) subInputType = 'accountsServicedReferrals';
-          else if (lowerMessage.includes('inbound')) subInputType = 'accountsServicedInbound';
-        }
-        
-        if (subInputType) {
-          // Create a more readable response
-          let sourceName = '';
-          if (subInputType.includes('DoorKnocks')) sourceName = 'door knocks';
-          else if (subInputType.includes('TagsPut')) sourceName = 'tags put';
-          else if (subInputType.includes('CallsMade')) sourceName = 'calls made';
-          else if (subInputType.includes('Referrals')) sourceName = 'referrals';
-          else if (subInputType.includes('Inbound')) sourceName = 'inbound';
-          
-          response = `I'll log ${count} ${mainInputType} from ${sourceName} for today. Great detailed tracking!`;
-        } else {
-          response = `I'll log ${count} ${mainInputType || 'activities'} for today. Keep up the great work!`;
-        }
-      } else {
-        response = "I heard you mention detailed activities, but I couldn't catch the numbers. Try saying something like '8 appointments from door knocks' or '5 deals from inbound calls'.";
-      }
-    } else if (lowerMessage.includes('add') && lowerMessage.includes('$')) {
-      // Extract expense amount
-      const amountMatch = message.match(/\$(\d+(?:\.\d{2})?)/);
-      if (amountMatch) {
-        const amount = parseFloat(amountMatch[1]);
-        const description = message.replace(/\$(\d+(?:\.\d{2})?)/, '').replace(/add/i, '').trim();
-        response = `I'll log a $${amount.toFixed(2)} expense for ${description || 'business expense'}. This will help with your tax deductions!`;
-      }
-    } else if (lowerMessage.includes('add lead') || lowerMessage.includes('add client')) {
-      // Extract lead/client name
-      const nameMatch = message.match(/add (?:lead|client) (.+?)(?: from (.+))?$/i);
-      if (nameMatch) {
-        const name = nameMatch[1];
-        const company = nameMatch[2];
-        response = `I'll add ${name}${company ? ` from ${company}` : ''} as a new lead. I'll also need their contact info later!`;
-      }
-    } else if (lowerMessage.includes('add team member') || lowerMessage.includes('add member')) {
-      // Extract team member name
-      const nameMatch = message.match(/add (?:team member|member) (.+?)(?: as (.+))?$/i);
-      if (nameMatch) {
-        const name = nameMatch[1];
-        const role = nameMatch[2];
-        response = `I'll add ${name}${role ? ` as ${role}` : ' as a team member'}. Welcome to the team!`;
-      }
-    } else if (lowerMessage.includes('add') && lowerMessage.includes('mile')) {
-      // Extract mileage
-      const mileageMatch = message.match(/(\d+(?:\.\d+)?)\s*miles?/i);
-      if (mileageMatch) {
-        const miles = parseFloat(mileageMatch[1]);
-        response = `I'll log ${miles} miles for your business trip. This will help with your tax deductions!`;
-      }
-    } else if (lowerMessage.includes('kpi') || lowerMessage.includes('performance') || lowerMessage.includes('metrics')) {
-      // If user data is available, provide data-driven responses
-      if (userData && userData.kpiData && userData.mileageData) {
-        console.log('[Jessica] Using user data for intelligent response');
-        const kpi = userData.kpiData;
-        response = `Here are your current KPIs:
-• Total Doors: ${kpi.totalDoors}
-• Total Appointments: ${kpi.totalAppointments}
-• Total Deals: ${kpi.totalDeals}
-• Total Accounts Serviced: ${kpi.totalAccountsServiced}
-• Total Hours Worked: ${kpi.totalHoursWorked}
-• Doors per Appointment: ${kpi.doorsPerAppointment.toFixed(2)}
-• Appointment Hold Rate: ${(kpi.appointmentHoldRate * 100).toFixed(1)}%
-• Appointment to Closed Rate: ${(kpi.appointmentToClosedRate * 100).toFixed(1)}%
-• Dollars per Hour: $${kpi.dollarsPerHour.toFixed(2)}`;
-      } else {
-        response = "I can help you track your KPIs! Try logging your daily activities and I'll show you your performance metrics.";
-      }
-    } else if (lowerMessage.includes('mileage') || lowerMessage.includes('drive') || lowerMessage.includes('car')) {
-      if (userData && userData.kpiData && userData.mileageData) {
-        const mileage = userData.mileageData;
-        response = `Your mileage summary:
-• Total Mileage: ${mileage.totalMileage.toFixed(1)} miles
-• Total Deduction: $${mileage.totalDeduction.toFixed(2)}
-• This Month: ${mileage.monthlyMileage.toFixed(1)} miles ($${mileage.monthlyDeduction.toFixed(2)})
-• Business Trips: ${mileage.tripsByType.business}
-• Personal Trips: ${mileage.tripsByType.personal}`;
-      } else {
-        response = "For mileage tracking, use the Mileage tab to log your business trips. Keep track of start/end locations and purposes. This is crucial for tax deductions!";
-      }
-    } else if (lowerMessage.includes('today') || lowerMessage.includes('progress')) {
-      if (userData && userData.kpiData && userData.mileageData) {
-        const today = userData.kpiData.todayInput;
-        if (today) {
-          response = `Today's progress:
-• Doors Knocked: ${today.doorsKnocked}
-• Appointments: ${today.appointments}
-• Appointment Holds: ${today.appointmentHolds}
-• Closed Deals: ${today.closedDeals}
-• Accounts Serviced: ${today.accountsServiced}
-• Hours Worked: ${today.hoursWorked}`;
-        } else {
-          response = "I don't see any data for today yet. Try saying 'I knocked 25 doors today' or 'Add 3 appointments' to log your activities!";
-        }
-      } else {
-        response = "I don't see any data for today yet. Use the Input tab to log your daily activities!";
-      }
-    } else if (lowerMessage.includes('revenue') || lowerMessage.includes('income') || lowerMessage.includes('earnings')) {
-      if (userData && userData.kpiData && userData.mileageData) {
-        const kpi = userData.kpiData;
-        response = `Your revenue metrics:
-• Total Revenue: $${kpi.totalRevenue.toFixed(2)}
-• Dollars per Hour: $${kpi.dollarsPerHour.toFixed(2)}
-• Total Hours Worked: ${kpi.totalHoursWorked}`;
-      } else {
-        response = "Track your revenue by logging your hours worked and income. I can help you calculate your dollars per hour!";
-      }
-    } else if (lowerMessage.includes('deduction') || lowerMessage.includes('tax')) {
-      if (userData && userData.kpiData && userData.mileageData) {
-        const mileage = userData.mileageData;
-        response = `Your tax deduction summary:
-• Total Mileage Deduction: $${mileage.totalDeduction.toFixed(2)}
-• This Month's Deduction: $${mileage.monthlyDeduction.toFixed(2)}
-• Total Business Miles: ${mileage.totalMileage.toFixed(1)} miles`;
-      } else {
-        response = "Great question about taxes! Track all your business expenses, mileage, and income here. Come tax time, you'll have everything organized for your 1099 filing!";
-      }
-    } else if (lowerMessage.includes('lead') || lowerMessage.includes('client') || lowerMessage.includes('customer')) {
-      if (userData && userData.supabaseData && userData.supabaseData.totalLeads > 0) {
-        const supabase = userData.supabaseData;
-        response = `Your lead management summary:
-• Total Leads: ${supabase.totalLeads}
-• Total Clients: ${supabase.totalClients}
-• Recent Leads: ${supabase.leads.slice(0, 3).map(l => l.name || l.company).join(', ')}`;
-      } else {
-        response = "Manage your leads in the CRM section! Add new clients, track follow-ups, and organize your business relationships. This helps you stay on top of opportunities!";
-      }
-    } else if (lowerMessage.includes('expense') || lowerMessage.includes('receipt') || lowerMessage.includes('cost')) {
-      if (userData && userData.supabaseData && userData.supabaseData.totalExpenses > 0) {
-        const supabase = userData.supabaseData;
-        response = `Your expense tracking summary:
-• Total Expenses: ${supabase.totalExpenses}
-• Total Amount: $${supabase.totalExpenseAmount.toFixed(2)}
-• Expense Categories: ${supabase.expenseCategories.length}`;
-      } else {
-        response = "I can help you track expenses! Use the Expenses tab to log your business costs. Take photos of receipts for easy record-keeping. This will help with tax deductions!";
-      }
-    } else if (lowerMessage.includes('team') || lowerMessage.includes('member')) {
-      if (userData && userData.supabaseData && userData.supabaseData.totalTeamMembers > 0) {
-        const supabase = userData.supabaseData;
-        response = `Your team summary:
-• Total Team Members: ${supabase.totalTeamMembers}
-• Team Members: ${supabase.teamMembers.map(m => m.name).join(', ')}`;
-      } else {
-        response = "Build your team! Add team members to track their performance and manage your business growth.";
-      }
-    } else if (lowerMessage.includes('bank') || lowerMessage.includes('account') || lowerMessage.includes('plaid')) {
-      response = "Connect your bank account using the Plaid integration! This will automatically import your transactions, making expense tracking much easier.";
-    } else if (lowerMessage.includes('help') || lowerMessage.includes('how') || lowerMessage.includes('what')) {
-      response = "I'm here to help with your 1099 business! I can assist with:\n• Logging daily activities (doors, appointments, deals)\n• Tracking expenses and mileage\n• Adding leads and team members\n• Analyzing your KPIs and performance\n\nTry saying things like:\n• 'I knocked 25 doors today'\n• 'Add $50 expense for gas'\n• 'Add lead John Smith'\n• 'What are my KPIs?'";
-    } else {
-      // Default helpful responses
-      const fallbackResponses = [
-        "I'm here to help with your 1099 business management! How can I assist you today?",
-        "Great question! I can help you with expenses, mileage, leads, and tax preparation. What would you like to focus on?",
-        "I understand you're asking about that. Let me help you with your business organization!",
-        "Thanks for reaching out! I can assist you with expense tracking, mileage logging, and lead management.",
-        "I see what you're asking about. Let me give you some guidance on business management!"
-      ];
-      response = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+    }
+    
+    // Final fallback for any other messages
+    if (!response) {
+      console.log('[Jessica] No specific processing, using general fallback');
+      response = "I understand your message, but I need more specific information to log your activities. Try telling me something like 'I knocked 25 doors, set 3 appointments from door knocks, and closed 2 deals from inbound calls' with specific numbers and sources.";
     }
     
     console.log(`[Jessica] Sending response: ${response.substring(0, 100)}...`);
