@@ -309,6 +309,9 @@ Extract the following key-value pairs from the user's message. Only include fiel
     - "3 deals from door knocks" → closedDeals: 3, dealsClosedDoorKnocks: 3
     - "1 account from referrals" → accountsServiced: 1, accountsServicedReferrals: 1
     - "4 appointments held from calls" → appointmentHolds: 4, appointmentsHeldCallsMade: 4
+14. **ADDITIVE vs REPLACEMENT**: 
+    - Additive language ("more", "additional", "extra", "another", "plus", "also") → ADD to existing values
+    - Standard language ("I closed 5 deals", "I set 2 appointments") → REPLACE existing values
 
 **Common patterns to recognize:**
 - "received 25 inbound calls" → outreachCallsMade: 25, outreachInbound: 25
@@ -381,7 +384,20 @@ If you cannot extract specific data, provide a natural, helpful response that gu
               if (extractedData.hoursWorked > 0) activities.push(`${extractedData.hoursWorked} hours worked`);
               
               if (activities.length > 0) {
-                naturalResponse = `🎉 Great work! I've logged ${activities.join(', ')} for today. You're making excellent progress! Keep up the momentum!`;
+                // Check if user is using additive language
+                const lowerMessage = message.toLowerCase();
+                const isAdditive = lowerMessage.includes('more') || 
+                                 lowerMessage.includes('additional') || 
+                                 lowerMessage.includes('extra') || 
+                                 lowerMessage.includes('another') ||
+                                 lowerMessage.includes('plus') ||
+                                 lowerMessage.includes('also');
+                
+                if (isAdditive) {
+                  naturalResponse = `🎉 Great! I've added ${activities.join(', ')} to your totals for today. Keep building momentum!`;
+                } else {
+                  naturalResponse = `🎉 Great work! I've logged ${activities.join(', ')} for today. You're making excellent progress! Keep up the momentum!`;
+                }
               }
             } catch (parseError) {
               // If not JSON, use the natural response as-is
@@ -485,11 +501,31 @@ If you cannot extract specific data, provide a natural, helpful response that gu
               // If existing data, merge the values
               if (existingData) {
                 console.log('[Jessica] Merging with existing data');
+                
+                // Check if user is using additive language
+                const lowerMessage = message.toLowerCase();
+                const isAdditive = lowerMessage.includes('more') || 
+                                 lowerMessage.includes('additional') || 
+                                 lowerMessage.includes('extra') || 
+                                 lowerMessage.includes('another') ||
+                                 lowerMessage.includes('plus') ||
+                                 lowerMessage.includes('also');
+                
+                console.log('[Jessica] Additive language detected:', isAdditive);
+                
                 Object.keys(completeData).forEach(key => {
                   if (completeData[key] > 0) {
                     const dbKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
                     if (upsertData[dbKey] !== undefined) {
-                      upsertData[dbKey] = (existingData[dbKey] || 0) + completeData[key];
+                      if (isAdditive) {
+                        // Add to existing value
+                        upsertData[dbKey] = (existingData[dbKey] || 0) + completeData[key];
+                        console.log(`[Jessica] Adding ${completeData[key]} to existing ${dbKey}: ${existingData[dbKey] || 0} + ${completeData[key]} = ${upsertData[dbKey]}`);
+                      } else {
+                        // Replace existing value
+                        upsertData[dbKey] = completeData[key];
+                        console.log(`[Jessica] Replacing ${dbKey}: ${existingData[dbKey] || 0} → ${completeData[key]}`);
+                      }
                     }
                   }
                 });
@@ -735,22 +771,34 @@ If you cannot extract specific data, provide a natural, helpful response that gu
         
         if (hasData) {
           // Build response message
-          const activities = [];
-          if (inputDataObj.doorsKnocked) activities.push(`${inputDataObj.doorsKnocked} doors knocked`);
-          if (inputDataObj.outreachCallsMade) activities.push(`${inputDataObj.outreachCallsMade} inbound calls`);
-          if (inputDataObj.appointments) activities.push(`${inputDataObj.appointments} appointments set`);
-          if (inputDataObj.appointmentHolds) activities.push(`${inputDataObj.appointmentHolds} appointments held`);
-          if (inputDataObj.closedDeals) activities.push(`${inputDataObj.closedDeals} deals closed`);
-          if (inputDataObj.hoursWorked) activities.push(`${inputDataObj.hoursWorked} hours worked`);
-          if (inputDataObj.dealsClosedInbound) activities.push(`${inputDataObj.dealsClosedInbound} deals from inbound`);
-          if (inputDataObj.accountsServicedInbound) activities.push(`${inputDataObj.accountsServicedInbound} accounts from inbound`);
-          if (inputDataObj.appointmentsSetInbound) activities.push(`${inputDataObj.appointmentsSetInbound} appointments from inbound`);
-          if (inputDataObj.appointmentsSetDoorKnocks) activities.push(`${inputDataObj.appointmentsSetDoorKnocks} appointments from door knocks`);
-          if (inputDataObj.dealsClosedDoorKnocks) activities.push(`${inputDataObj.dealsClosedDoorKnocks} deals from door knocks`);
-          if (inputDataObj.accountsServicedReferrals) activities.push(`${inputDataObj.accountsServicedReferrals} accounts from referrals`);
+          const fallbackActivities = [];
+          if (inputDataObj.doorsKnocked) fallbackActivities.push(`${inputDataObj.doorsKnocked} doors knocked`);
+          if (inputDataObj.outreachCallsMade) fallbackActivities.push(`${inputDataObj.outreachCallsMade} inbound calls`);
+          if (inputDataObj.appointments) fallbackActivities.push(`${inputDataObj.appointments} appointments set`);
+          if (inputDataObj.appointmentHolds) fallbackActivities.push(`${inputDataObj.appointmentHolds} appointments held`);
+          if (inputDataObj.closedDeals) fallbackActivities.push(`${inputDataObj.closedDeals} deals closed`);
+          if (inputDataObj.hoursWorked) fallbackActivities.push(`${inputDataObj.hoursWorked} hours worked`);
+          if (inputDataObj.dealsClosedInbound) fallbackActivities.push(`${inputDataObj.dealsClosedInbound} deals from inbound`);
+          if (inputDataObj.accountsServicedInbound) fallbackActivities.push(`${inputDataObj.accountsServicedInbound} accounts from inbound`);
+          if (inputDataObj.appointmentsSetInbound) fallbackActivities.push(`${inputDataObj.appointmentsSetInbound} appointments from inbound`);
+          if (inputDataObj.appointmentsSetDoorKnocks) fallbackActivities.push(`${inputDataObj.appointmentsSetDoorKnocks} appointments from door knocks`);
+          if (inputDataObj.dealsClosedDoorKnocks) fallbackActivities.push(`${inputDataObj.dealsClosedDoorKnocks} deals from door knocks`);
+          if (inputDataObj.accountsServicedReferrals) fallbackActivities.push(`${inputDataObj.accountsServicedReferrals} accounts from referrals`);
+          
+          // Check if user is using additive language
+          const isAdditive = lowerMessage.includes('more') || 
+                           lowerMessage.includes('additional') || 
+                           lowerMessage.includes('extra') || 
+                           lowerMessage.includes('another') ||
+                           lowerMessage.includes('plus') ||
+                           lowerMessage.includes('also');
           
           // Customize fallback response
-          response = `🚀 Awesome! I've logged ${activities.join(', ')} for today. You're making great progress!`;
+          if (isAdditive) {
+            response = `🚀 Awesome! I've added ${fallbackActivities.join(', ')} to your totals for today. Keep building momentum!`;
+          } else {
+            response = `🚀 Awesome! I've logged ${fallbackActivities.join(', ')} for today. You're making great progress!`;
+          }
           
           res.json({
             response: response,
