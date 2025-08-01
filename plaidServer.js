@@ -309,6 +309,9 @@ Extract the following key-value pairs from the user's message. Only include fiel
     - "3 deals from door knocks" → closedDeals: 3, dealsClosedDoorKnocks: 3
     - "1 account from referrals" → accountsServiced: 1, accountsServicedReferrals: 1
     - "4 appointments held from calls" → appointmentHolds: 4, appointmentsHeldCallsMade: 4
+    - **"2 appointments from inbound" → appointments: 2, appointmentsSetInbound: 2**
+    - **"3 deals from inbound" → closedDeals: 3, dealsClosedInbound: 3**
+    - **"1 account from inbound" → accountsServiced: 1, accountsServicedInbound: 1**
 14. **ADDITIVE vs REPLACEMENT**: 
     - Additive language ("more", "additional", "extra", "another", "plus", "also") → ADD to existing values
     - Standard language ("I closed 5 deals", "I set 2 appointments") → REPLACE existing values
@@ -796,6 +799,16 @@ If you cannot extract specific data, provide a natural, helpful response that gu
           if (appointmentsInboundCallsMatch) {
             inputDataObj.appointments = parseInt(appointmentsInboundCallsMatch[1]);
             inputDataObj.appointmentsSetInbound = parseInt(appointmentsInboundCallsMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        // Handle "X appointments from inbound" pattern (without 'calls')
+        if (lowerMessage.includes('appointments') && lowerMessage.includes('from') && lowerMessage.includes('inbound')) {
+          const appointmentsInboundMatch = message.match(/(\d+)\s+appointments?\s+from\s+inbound/i);
+          if (appointmentsInboundMatch) {
+            inputDataObj.appointments = parseInt(appointmentsInboundMatch[1]);
+            inputDataObj.appointmentsSetInbound = parseInt(appointmentsInboundMatch[1]);
             hasData = true;
           }
         }
