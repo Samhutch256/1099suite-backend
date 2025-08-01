@@ -223,7 +223,8 @@ app.post('/api/jessica-chat-message', async (req, res) => {
       lowerMessage.includes('serviced') ||
       lowerMessage.includes('accounts') ||
       lowerMessage.includes('doors') ||
-      lowerMessage.includes('knocked')
+      lowerMessage.includes('knocked') ||
+      lowerMessage.includes('derived')
     );
     
     console.log('[Jessica] AI trigger check:', {
@@ -634,6 +635,24 @@ If you cannot extract specific data, provide a natural, helpful response that gu
           const accountsServicedMatch = message.match(/(\d+)\s+accounts?\s+serviced/i);
           if (accountsServicedMatch) {
             inputDataObj.accountsServiced = parseInt(accountsServicedMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        // Handle "X deals from inbound" pattern (alternative)
+        if (lowerMessage.includes('deals') && lowerMessage.includes('inbound')) {
+          const dealsInboundAltMatch = message.match(/(\d+)\s+deals?\s+.*inbound/i);
+          if (dealsInboundAltMatch) {
+            inputDataObj.dealsClosedInbound = parseInt(dealsInboundAltMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        // Handle "X accounts derived from inbound" pattern (alternative)
+        if (lowerMessage.includes('account') && lowerMessage.includes('inbound')) {
+          const accountsInboundAltMatch = message.match(/(\d+)\s+accounts?\s+.*inbound/i);
+          if (accountsInboundAltMatch) {
+            inputDataObj.accountsServicedInbound = parseInt(accountsInboundAltMatch[1]);
             hasData = true;
           }
         }
