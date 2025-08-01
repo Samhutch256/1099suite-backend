@@ -613,6 +613,24 @@ If you cannot extract specific data, provide a natural, helpful response that gu
           }
         }
         
+        // Handle "set X more appointments" pattern
+        if (lowerMessage.includes('set') && lowerMessage.includes('more') && lowerMessage.includes('appointments')) {
+          const setMoreMatch = message.match(/set\s+(\d+)\s+more\s+appointments/i);
+          if (setMoreMatch) {
+            inputDataObj.appointments = parseInt(setMoreMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        // Handle "closed X additional deals" pattern
+        if (lowerMessage.includes('closed') && lowerMessage.includes('additional') && lowerMessage.includes('deals')) {
+          const closedAdditionalMatch = message.match(/closed\s+(\d+)\s+additional\s+deals/i);
+          if (closedAdditionalMatch) {
+            inputDataObj.closedDeals = parseInt(closedAdditionalMatch[1]);
+            hasData = true;
+          }
+        }
+        
         if (lowerMessage.includes('appointments') && lowerMessage.includes('held')) {
           const heldMatch = message.match(/(\d+)\s+appointments?\s+held/i);
           if (heldMatch) {
