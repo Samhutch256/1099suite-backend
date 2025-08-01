@@ -252,6 +252,11 @@ When users share their business activities, extract and log the relevant data wh
 **Data Extraction Instructions:**
 Extract the following key-value pairs from the user's message. Only include fields that have values > 0:
 
+**CRITICAL**: When a source is specified (e.g., "from inbound", "from door knocks", "from referrals"), ALWAYS extract BOTH the main field AND the corresponding sub-field:
+- "2 appointments from inbound" → appointments: 2, appointmentsSetInbound: 2
+- "3 deals from inbound" → closedDeals: 3, dealsClosedInbound: 3
+- "1 account from referrals" → accountsServiced: 1, accountsServicedReferrals: 1
+
 **Main Metrics:**
 - doorsKnocked: Total doors knocked
 - appointments: Total appointments set
@@ -327,6 +332,9 @@ Extract the following key-value pairs from the user's message. Only include fiel
 - **"2 appointments from inbound calls" → appointments: 2, appointmentsSetInbound: 2**
 - **"3 deals from door knocks" → closedDeals: 3, dealsClosedDoorKnocks: 3**
 - **"1 account from referrals" → accountsServiced: 1, accountsServicedReferrals: 1**
+- **"3 deals from inbound" → closedDeals: 3, dealsClosedInbound: 3**
+- **"2 appointments from inbound" → appointments: 2, appointmentsSetInbound: 2**
+- **"1 account from inbound" → accountsServiced: 1, accountsServicedInbound: 1**
 
 **Response Format:**
 If you can extract data, respond with PURE JSON only, no additional text:
