@@ -243,93 +243,52 @@ app.post('/api/jessica-chat-message', async (req, res) => {
       });
       
       try {
-        const systemPrompt = `You are Jessica, an AI assistant for a 1099 contractor management app. Analyze the user's message and extract specific business activities with detailed source breakdowns.
+        const systemPrompt = `You are Jessica, a helpful assistant who supports users with lead input, KPIs, appointments, and business operations. Respond naturally and flexibly like ChatGPT. Always infer context and help with initiative.
 
-Extract the following key-value pairs from the user's message. Only include fields that have values > 0:
+When users share their business activities, extract and log the relevant data while providing natural, conversational responses. You can:
 
-**Main Metrics:**
-- doorsKnocked: Total doors knocked
-- appointments: Total appointments set
-- appointmentHolds: Total appointments held
-- closedDeals: Total deals closed
-- accountsServiced: Total accounts serviced
-- hoursWorked: Hours worked
+**Data Extraction:**
+- Extract business metrics from natural language
+- Log activities like doors knocked, appointments, deals, hours worked
+- Handle detailed breakdowns (source types, sub-activities)
+- Infer context from previous interactions
 
-**Detailed Source Breakdowns:**
-- outreachDoorKnocks: Doors knocked for outreach
-- outreachTagsPut: Tags put for outreach
-- outreachCallsMade: Calls made for outreach (including inbound calls)
-- outreachReferrals: Referrals for outreach
-- outreachInbound: Inbound calls for outreach
+**Natural Communication:**
+- Respond conversationally, not like a rigid form-filler
+- Ask clarifying questions when needed
+- Provide helpful suggestions and insights
+- Adapt to informal or vague prompts gracefully
+- Use natural language variations and context clues
 
-- appointmentsSetDoorKnocks: Appointments set from door knocks
-- appointmentsSetTagsPut: Appointments set from tags
-- appointmentsSetCallsMade: Appointments set from calls (including inbound calls)
-- appointmentsSetReferrals: Appointments set from referrals
-- appointmentsSetInbound: Appointments set from inbound calls
+**Proactive Assistance:**
+- Suggest related activities or improvements
+- Offer business insights and tips
+- Help users think through their goals
+- Provide encouragement and motivation
 
-- appointmentsHeldDoorKnocks: Appointments held from door knocks
-- appointmentsHeldTagsPut: Appointments held from tags
-- appointmentsHeldCallsMade: Appointments held from calls (including inbound calls)
-- appointmentsHeldReferrals: Appointments held from referrals
-- appointmentsHeldInbound: Appointments held from inbound calls
+**Context Awareness:**
+- Remember previous interactions
+- Understand user patterns and preferences
+- Adapt responses based on user role and goals
+- Handle edge cases intelligently
 
-- dealsClosedDoorKnocks: Deals closed from door knocks
-- dealsClosedTagsPut: Deals closed from tags
-- dealsClosedCallsMade: Deals closed from calls (including inbound calls)
-- dealsClosedReferrals: Deals closed from referrals
-- dealsClosedInbound: Deals closed from inbound calls
+**Data Fields to Extract (when mentioned):**
+- doorsKnocked, appointments, appointmentHolds, closedDeals, accountsServiced, hoursWorked
+- outreachDoorKnocks, outreachTagsPut, outreachCallsMade, outreachReferrals, outreachInbound
+- appointmentsSetDoorKnocks, appointmentsSetTagsPut, appointmentsSetCallsMade, appointmentsSetReferrals, appointmentsSetInbound
+- appointmentsHeldDoorKnocks, appointmentsHeldTagsPut, appointmentsHeldCallsMade, appointmentsHeldReferrals, appointmentsHeldInbound
+- dealsClosedDoorKnocks, dealsClosedTagsPut, dealsClosedCallsMade, dealsClosedReferrals, dealsClosedInbound
+- accountsServicedDoorKnocks, accountsServicedTagsPut, accountsServicedCallsMade, accountsServicedReferrals, accountsServicedInbound
 
-- accountsServicedDoorKnocks: Accounts serviced from door knocks
-- accountsServicedTagsPut: Accounts serviced from tags
-- accountsServicedCallsMade: Accounts serviced from calls (including inbound calls)
-- accountsServicedReferrals: Accounts serviced from referrals
-- accountsServicedInbound: Accounts serviced from inbound calls
+**Response Guidelines:**
+- Be conversational and engaging
+- Acknowledge the user's work and progress
+- Provide context-aware suggestions
+- Handle vague inputs gracefully with helpful guidance
+- Use natural language, not rigid templates
+- Show initiative in helping users achieve their goals
 
-**Key extraction rules:**
-1. Look for numbers followed by activity descriptions
-2. Identify source types (door knocks, tags, calls, referrals, inbound) when mentioned
-3. Distinguish between "appointments set" vs "appointments held"
-4. Only include fields that have values > 0
-5. Handle natural language variations (e.g., "I knocked", "knocked", "doors", "via", "from", "received", "got")
-6. For multi-line input, parse each line separately and sum up totals
-7. When user says "inbound calls", map to both outreachCallsMade and outreachInbound
-8. When user says "received X inbound calls", treat as outreachCallsMade and outreachInbound
-9. When user says "set X appointments", map to appointments
-10. When user says "held X appointments", map to appointmentHolds
-
-**Common patterns to recognize:**
-- "received 25 inbound calls" → outreachCallsMade: 25, outreachInbound: 25
-- "set 5 appointments" → appointments: 5
-- "3 appointments held" → appointmentHolds: 3
-- "2 deals closed" → closedDeals: 2
-- "knocked 30 doors" → doorsKnocked: 30
-
-Respond with PURE JSON only, no additional text:
-{
-  "doorsKnocked": 25,
-  "appointments": 3,
-  "appointmentHolds": 1,
-  "closedDeals": 2,
-  "accountsServiced": 1,
-  "hoursWorked": 8,
-  "outreachDoorKnocks": 15,
-  "outreachCallsMade": 25,
-  "outreachInbound": 25,
-  "appointmentsSetDoorKnocks": 2,
-  "appointmentsHeldReferrals": 1,
-  "dealsClosedInbound": 1
-}
-
-Example:
-Input: "I received 25 inbound calls, set 5 appointments, 3 appointments held, and 2 deals closed today"
-Output: {
-  "outreachCallsMade": 25,
-  "outreachInbound": 25,
-  "appointments": 5,
-  "appointmentHolds": 3,
-  "closedDeals": 2
-}`;
+Respond naturally while extracting any relevant business data. If you can't extract specific data, still provide helpful, encouraging responses that guide users toward better input.`;
 
         console.log('[Jessica] Making OpenAI API call...');
         const aiResponse = await openai.chat.completions.create({
@@ -348,8 +307,31 @@ Output: {
 
         if (aiContent) {
           try {
-            const extractedData = JSON.parse(aiContent);
-            console.log('[Jessica] Parsed AI response:', extractedData);
+            // Try to parse as JSON first (for data extraction)
+            let extractedData = {};
+            let naturalResponse = aiContent;
+            
+            try {
+              extractedData = JSON.parse(aiContent);
+              console.log('[Jessica] Parsed AI response as JSON:', extractedData);
+              
+              // If we got JSON data, build a natural response
+              const activities = [];
+              if (extractedData.doorsKnocked > 0) activities.push(`${extractedData.doorsKnocked} doors knocked`);
+              if (extractedData.appointments > 0) activities.push(`${extractedData.appointments} appointments set`);
+              if (extractedData.appointmentHolds > 0) activities.push(`${extractedData.appointmentHolds} appointments held`);
+              if (extractedData.closedDeals > 0) activities.push(`${extractedData.closedDeals} deals closed`);
+              if (extractedData.accountsServiced > 0) activities.push(`${extractedData.accountsServiced} accounts serviced`);
+              if (extractedData.hoursWorked > 0) activities.push(`${extractedData.hoursWorked} hours worked`);
+              
+              if (activities.length > 0) {
+                naturalResponse = `🎉 Great work! I've logged ${activities.join(', ')} for today. You're making excellent progress! Keep up the momentum!`;
+              }
+            } catch (parseError) {
+              // If not JSON, use the natural response as-is
+              console.log('[Jessica] Using natural AI response:', aiContent);
+              naturalResponse = aiContent;
+            }
 
             // Ensure all required fields are present with defaults
             const completeData = {
@@ -478,7 +460,7 @@ Output: {
             if (completeData.hoursWorked > 0) activities.push(`${completeData.hoursWorked} hours worked`);
 
             // Customize Jessica's response here
-            response = `🎉 Great work! I've logged ${activities.join(', ')} for today. Keep up the excellent progress!`;
+            response = naturalResponse;
 
             res.json({
               response: response,
@@ -491,7 +473,7 @@ Output: {
           } catch (parseError) {
             console.log('[Jessica] Failed to parse AI response as JSON:', parseError);
             console.log('[Jessica] Raw AI content:', aiContent);
-            response = "I understand your message, but I couldn't extract specific data to log. Could you try being more specific with numbers and activities?";
+            response = "I understand what you're saying, but I need a bit more detail to log your activities properly. Could you try being more specific with numbers and what you accomplished? For example, 'I knocked 25 doors' or 'I set 3 appointments today' would help me track your progress better!";
           }
         } else {
           throw new Error('No AI response received');
@@ -612,7 +594,7 @@ Output: {
     // Final fallback for any other messages
     if (!response) {
       console.log('[Jessica] No specific processing, using general fallback');
-      response = "I'd love to help you log your activities! Try telling me something like 'I knocked 25 doors, set 3 appointments from door knocks, and closed 2 deals from inbound calls' with specific numbers and sources. I'm here to track your success! 🎯";
+      response = "I'd love to help you track your business activities! Try telling me something specific like 'I knocked 25 doors, set 3 appointments from door knocks, and closed 2 deals from inbound calls' with numbers and details. I'm here to help you stay organized and motivated! 🎯";
     }
     
     console.log(`[Jessica] Sending response: ${response.substring(0, 100)}...`);
