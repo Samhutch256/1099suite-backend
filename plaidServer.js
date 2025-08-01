@@ -673,6 +673,36 @@ If you cannot extract specific data, provide a natural, helpful response that gu
           }
         }
         
+        // Handle "Log X appointments for today under inbound" pattern
+        if (lowerMessage.includes('log') && lowerMessage.includes('appointments') && lowerMessage.includes('under') && lowerMessage.includes('inbound')) {
+          const logAppointmentsInboundMatch = message.match(/log\s+(\d+)\s+appointments?\s+.*under\s+inbound/i);
+          if (logAppointmentsInboundMatch) {
+            inputDataObj.appointments = parseInt(logAppointmentsInboundMatch[1]);
+            inputDataObj.appointmentsSetInbound = parseInt(logAppointmentsInboundMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        // Handle "Log X deals from inbound" pattern
+        if (lowerMessage.includes('log') && lowerMessage.includes('deals') && lowerMessage.includes('from') && lowerMessage.includes('inbound')) {
+          const logDealsInboundMatch = message.match(/log\s+(\d+)\s+deals?\s+.*from\s+inbound/i);
+          if (logDealsInboundMatch) {
+            inputDataObj.closedDeals = parseInt(logDealsInboundMatch[1]);
+            inputDataObj.dealsClosedInbound = parseInt(logDealsInboundMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        // Handle "Log X accounts from referrals" pattern
+        if (lowerMessage.includes('log') && lowerMessage.includes('account') && lowerMessage.includes('from') && lowerMessage.includes('referral')) {
+          const logAccountsReferralMatch = message.match(/log\s+(\d+)\s+accounts?\s+.*from\s+referrals?/i);
+          if (logAccountsReferralMatch) {
+            inputDataObj.accountsServiced = parseInt(logAccountsReferralMatch[1]);
+            inputDataObj.accountsServicedReferrals = parseInt(logAccountsReferralMatch[1]);
+            hasData = true;
+          }
+        }
+        
         // Handle "X appointments from door knocks" pattern
         if (lowerMessage.includes('appointments') && lowerMessage.includes('from') && lowerMessage.includes('door')) {
           const appointmentsDoorMatch = message.match(/(\d+)\s+appointments?\s+from\s+door/i);
