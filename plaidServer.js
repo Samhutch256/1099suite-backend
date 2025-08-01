@@ -477,7 +477,8 @@ Output: {
             if (completeData.accountsServiced > 0) activities.push(`${completeData.accountsServiced} accounts serviced`);
             if (completeData.hoursWorked > 0) activities.push(`${completeData.hoursWorked} hours worked`);
 
-            response = `✅ I logged ${activities.join(', ')} with detailed source breakdowns.`;
+            // Customize Jessica's response here
+            response = `🎉 Great work! I've logged ${activities.join(', ')} for today. Keep up the excellent progress!`;
 
             res.json({
               response: response,
@@ -580,7 +581,8 @@ Output: {
           if (inputDataObj.closedDeals) activities.push(`${inputDataObj.closedDeals} deals closed`);
           if (inputDataObj.hoursWorked) activities.push(`${inputDataObj.hoursWorked} hours worked`);
           
-          response = `✅ I logged ${activities.join(', ')} for today.`;
+          // Customize fallback response
+          response = `🚀 Awesome! I've logged ${activities.join(', ')} for today. You're making great progress!`;
           
           res.json({
             response: response,
@@ -596,13 +598,13 @@ Output: {
       if (numbers && numbers.length === 1) {
         const count = parseInt(numbers[0]);
         if (lowerMessage.includes('knocked') || lowerMessage.includes('door')) {
-          response = `I'll log ${count} doors knocked for today. You can also tell me appointments, deals, or hours worked!`;
+          response = `🎯 I'll log ${count} doors knocked for today. You're building momentum!`;
         } else if (lowerMessage.includes('appointment') || lowerMessage.includes('set')) {
-          response = `I'll log ${count} appointments for today. Great work!`;
+          response = `📅 I'll log ${count} appointments for today. Great networking!`;
         } else if (lowerMessage.includes('deal') || lowerMessage.includes('closed')) {
-          response = `I'll log ${count} deals closed for today. Excellent!`;
+          response = `💰 I'll log ${count} deals closed for today. Fantastic results!`;
         } else if (lowerMessage.includes('hour') || lowerMessage.includes('worked')) {
-          response = `I'll log ${count} hours worked for today. Keep it up!`;
+          response = `⏰ I'll log ${count} hours worked for today. Stay productive!`;
         }
       }
     }
@@ -610,7 +612,7 @@ Output: {
     // Final fallback for any other messages
     if (!response) {
       console.log('[Jessica] No specific processing, using general fallback');
-      response = "I understand your message, but I need more specific information to log your activities. Try telling me something like 'I knocked 25 doors, set 3 appointments from door knocks, and closed 2 deals from inbound calls' with specific numbers and sources.";
+      response = "I'd love to help you log your activities! Try telling me something like 'I knocked 25 doors, set 3 appointments from door knocks, and closed 2 deals from inbound calls' with specific numbers and sources. I'm here to track your success! 🎯";
     }
     
     console.log(`[Jessica] Sending response: ${response.substring(0, 100)}...`);
