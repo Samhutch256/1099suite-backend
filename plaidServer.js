@@ -303,6 +303,11 @@ Extract the following key-value pairs from the user's message. Only include fiel
 10. When user says "held X appointments", map to appointmentHolds
 11. When user says "X deals from inbound", map to dealsClosedInbound
 12. When user says "X accounts derived from inbound", map to accountsServicedInbound
+13. **IMPORTANT**: When user specifies a source (e.g., "under inbound", "from door knocks"), map BOTH the main field AND the corresponding sub-field:
+    - "2 appointments under inbound" → appointments: 2, appointmentsSetInbound: 2
+    - "3 deals from door knocks" → closedDeals: 3, dealsClosedDoorKnocks: 3
+    - "1 account from referrals" → accountsServiced: 1, accountsServicedReferrals: 1
+    - "4 appointments held from calls" → appointmentHolds: 4, appointmentsHeldCallsMade: 4
 
 **Common patterns to recognize:**
 - "received 25 inbound calls" → outreachCallsMade: 25, outreachInbound: 25
@@ -657,6 +662,46 @@ If you cannot extract specific data, provide a natural, helpful response that gu
           }
         }
         
+        // Handle "X appointments under inbound" pattern
+        if (lowerMessage.includes('appointments') && lowerMessage.includes('under') && lowerMessage.includes('inbound')) {
+          const appointmentsInboundMatch = message.match(/(\d+)\s+appointments?\s+under\s+inbound/i);
+          if (appointmentsInboundMatch) {
+            inputDataObj.appointments = parseInt(appointmentsInboundMatch[1]);
+            inputDataObj.appointmentsSetInbound = parseInt(appointmentsInboundMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        // Handle "X appointments from door knocks" pattern
+        if (lowerMessage.includes('appointments') && lowerMessage.includes('from') && lowerMessage.includes('door')) {
+          const appointmentsDoorMatch = message.match(/(\d+)\s+appointments?\s+from\s+door/i);
+          if (appointmentsDoorMatch) {
+            inputDataObj.appointments = parseInt(appointmentsDoorMatch[1]);
+            inputDataObj.appointmentsSetDoorKnocks = parseInt(appointmentsDoorMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        // Handle "X deals from door knocks" pattern
+        if (lowerMessage.includes('deals') && lowerMessage.includes('from') && lowerMessage.includes('door')) {
+          const dealsDoorMatch = message.match(/(\d+)\s+deals?\s+from\s+door/i);
+          if (dealsDoorMatch) {
+            inputDataObj.closedDeals = parseInt(dealsDoorMatch[1]);
+            inputDataObj.dealsClosedDoorKnocks = parseInt(dealsDoorMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        // Handle "X accounts from referrals" pattern
+        if (lowerMessage.includes('account') && lowerMessage.includes('from') && lowerMessage.includes('referral')) {
+          const accountsReferralMatch = message.match(/(\d+)\s+accounts?\s+from\s+referrals?/i);
+          if (accountsReferralMatch) {
+            inputDataObj.accountsServiced = parseInt(accountsReferralMatch[1]);
+            inputDataObj.accountsServicedReferrals = parseInt(accountsReferralMatch[1]);
+            hasData = true;
+          }
+        }
+        
         if (hasData) {
           // Build response message
           const activities = [];
@@ -668,6 +713,10 @@ If you cannot extract specific data, provide a natural, helpful response that gu
           if (inputDataObj.hoursWorked) activities.push(`${inputDataObj.hoursWorked} hours worked`);
           if (inputDataObj.dealsClosedInbound) activities.push(`${inputDataObj.dealsClosedInbound} deals from inbound`);
           if (inputDataObj.accountsServicedInbound) activities.push(`${inputDataObj.accountsServicedInbound} accounts from inbound`);
+          if (inputDataObj.appointmentsSetInbound) activities.push(`${inputDataObj.appointmentsSetInbound} appointments from inbound`);
+          if (inputDataObj.appointmentsSetDoorKnocks) activities.push(`${inputDataObj.appointmentsSetDoorKnocks} appointments from door knocks`);
+          if (inputDataObj.dealsClosedDoorKnocks) activities.push(`${inputDataObj.dealsClosedDoorKnocks} deals from door knocks`);
+          if (inputDataObj.accountsServicedReferrals) activities.push(`${inputDataObj.accountsServicedReferrals} accounts from referrals`);
           
           // Customize fallback response
           response = `🚀 Awesome! I've logged ${activities.join(', ')} for today. You're making great progress!`;
