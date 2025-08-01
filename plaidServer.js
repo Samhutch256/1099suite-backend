@@ -673,92 +673,8 @@ If you cannot extract specific data, provide a natural, helpful response that gu
         if (lowerMessage.includes('deals') && lowerMessage.includes('from') && lowerMessage.includes('inbound')) {
           const dealsInboundMatch = message.match(/(\d+)\s+deals?\s+from\s+inbound/i);
           if (dealsInboundMatch) {
+            inputDataObj.closedDeals = parseInt(dealsInboundMatch[1]);
             inputDataObj.dealsClosedInbound = parseInt(dealsInboundMatch[1]);
-            hasData = true;
-          }
-        }
-        
-        // Handle "X accounts derived from inbound" pattern
-        if (lowerMessage.includes('account') && lowerMessage.includes('derived') && lowerMessage.includes('from') && lowerMessage.includes('inbound')) {
-          const accountsInboundMatch = message.match(/(\d+)\s+accounts?\s+derived\s+from\s+inbound/i);
-          if (accountsInboundMatch) {
-            inputDataObj.accountsServicedInbound = parseInt(accountsInboundMatch[1]);
-            hasData = true;
-          }
-        }
-        
-        // Handle "X deals closed" pattern
-        if (lowerMessage.includes('deals') && lowerMessage.includes('closed')) {
-          const dealsClosedMatch = message.match(/(\d+)\s+deals?\s+closed/i);
-          if (dealsClosedMatch) {
-            inputDataObj.closedDeals = parseInt(dealsClosedMatch[1]);
-            hasData = true;
-          }
-        }
-        
-        // Handle "X accounts serviced" pattern
-        if (lowerMessage.includes('account') && lowerMessage.includes('serviced')) {
-          const accountsServicedMatch = message.match(/(\d+)\s+accounts?\s+serviced/i);
-          if (accountsServicedMatch) {
-            inputDataObj.accountsServiced = parseInt(accountsServicedMatch[1]);
-            hasData = true;
-          }
-        }
-        
-        // Handle "X deals from inbound" pattern (alternative)
-        if (lowerMessage.includes('deals') && lowerMessage.includes('inbound')) {
-          const dealsInboundAltMatch = message.match(/(\d+)\s+deals?\s+.*inbound/i);
-          if (dealsInboundAltMatch) {
-            inputDataObj.dealsClosedInbound = parseInt(dealsInboundAltMatch[1]);
-            hasData = true;
-          }
-        }
-        
-        // Handle "X accounts derived from inbound" pattern (alternative)
-        if (lowerMessage.includes('account') && lowerMessage.includes('inbound')) {
-          const accountsInboundAltMatch = message.match(/(\d+)\s+accounts?\s+.*inbound/i);
-          if (accountsInboundAltMatch) {
-            inputDataObj.accountsServicedInbound = parseInt(accountsInboundAltMatch[1]);
-            hasData = true;
-          }
-        }
-        
-        // Handle "X appointments under inbound" pattern
-        if (lowerMessage.includes('appointments') && lowerMessage.includes('under') && lowerMessage.includes('inbound')) {
-          const appointmentsInboundMatch = message.match(/(\d+)\s+appointments?\s+under\s+inbound/i);
-          if (appointmentsInboundMatch) {
-            inputDataObj.appointments = parseInt(appointmentsInboundMatch[1]);
-            inputDataObj.appointmentsSetInbound = parseInt(appointmentsInboundMatch[1]);
-            hasData = true;
-          }
-        }
-        
-        // Handle "Log X appointments for today under inbound" pattern
-        if (lowerMessage.includes('log') && lowerMessage.includes('appointments') && lowerMessage.includes('under') && lowerMessage.includes('inbound')) {
-          const logAppointmentsInboundMatch = message.match(/log\s+(\d+)\s+appointments?\s+.*under\s+inbound/i);
-          if (logAppointmentsInboundMatch) {
-            inputDataObj.appointments = parseInt(logAppointmentsInboundMatch[1]);
-            inputDataObj.appointmentsSetInbound = parseInt(logAppointmentsInboundMatch[1]);
-            hasData = true;
-          }
-        }
-        
-        // Handle "Log X deals from inbound" pattern
-        if (lowerMessage.includes('log') && lowerMessage.includes('deals') && lowerMessage.includes('from') && lowerMessage.includes('inbound')) {
-          const logDealsInboundMatch = message.match(/log\s+(\d+)\s+deals?\s+.*from\s+inbound/i);
-          if (logDealsInboundMatch) {
-            inputDataObj.closedDeals = parseInt(logDealsInboundMatch[1]);
-            inputDataObj.dealsClosedInbound = parseInt(logDealsInboundMatch[1]);
-            hasData = true;
-          }
-        }
-        
-        // Handle "Log X accounts from referrals" pattern
-        if (lowerMessage.includes('log') && lowerMessage.includes('account') && lowerMessage.includes('from') && lowerMessage.includes('referral')) {
-          const logAccountsReferralMatch = message.match(/log\s+(\d+)\s+accounts?\s+.*from\s+referrals?/i);
-          if (logAccountsReferralMatch) {
-            inputDataObj.accountsServiced = parseInt(logAccountsReferralMatch[1]);
-            inputDataObj.accountsServicedReferrals = parseInt(logAccountsReferralMatch[1]);
             hasData = true;
           }
         }
@@ -769,16 +685,6 @@ If you cannot extract specific data, provide a natural, helpful response that gu
           if (appointmentsDoorMatch) {
             inputDataObj.appointments = parseInt(appointmentsDoorMatch[1]);
             inputDataObj.appointmentsSetDoorKnocks = parseInt(appointmentsDoorMatch[1]);
-            hasData = true;
-          }
-        }
-        
-        // Handle "X deals from door knocks" pattern
-        if (lowerMessage.includes('deals') && lowerMessage.includes('from') && lowerMessage.includes('door')) {
-          const dealsDoorMatch = message.match(/(\d+)\s+deals?\s+from\s+door/i);
-          if (dealsDoorMatch) {
-            inputDataObj.closedDeals = parseInt(dealsDoorMatch[1]);
-            inputDataObj.dealsClosedDoorKnocks = parseInt(dealsDoorMatch[1]);
             hasData = true;
           }
         }
@@ -819,6 +725,74 @@ If you cannot extract specific data, provide a natural, helpful response that gu
           if (appointmentsDoorMatch) {
             inputDataObj.appointments = parseInt(appointmentsDoorMatch[1]);
             inputDataObj.appointmentsSetDoorKnocks = parseInt(appointmentsDoorMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        // Handle "X accounts derived from inbound" pattern
+        if (lowerMessage.includes('account') && lowerMessage.includes('derived') && lowerMessage.includes('from') && lowerMessage.includes('inbound')) {
+          const accountsInboundMatch = message.match(/(\d+)\s+accounts?\s+derived\s+from\s+inbound/i);
+          if (accountsInboundMatch) {
+            inputDataObj.accountsServiced = parseInt(accountsInboundMatch[1]);
+            inputDataObj.accountsServicedInbound = parseInt(accountsInboundMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        // Handle "X deals closed" pattern
+        if (lowerMessage.includes('deals') && lowerMessage.includes('closed')) {
+          const dealsClosedMatch = message.match(/(\d+)\s+deals?\s+closed/i);
+          if (dealsClosedMatch) {
+            inputDataObj.closedDeals = parseInt(dealsClosedMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        // Handle "X accounts serviced" pattern
+        if (lowerMessage.includes('account') && lowerMessage.includes('serviced')) {
+          const accountsServicedMatch = message.match(/(\d+)\s+accounts?\s+serviced/i);
+          if (accountsServicedMatch) {
+            inputDataObj.accountsServiced = parseInt(accountsServicedMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        // Handle "X appointments under inbound" pattern
+        if (lowerMessage.includes('appointments') && lowerMessage.includes('under') && lowerMessage.includes('inbound')) {
+          const appointmentsInboundMatch = message.match(/(\d+)\s+appointments?\s+under\s+inbound/i);
+          if (appointmentsInboundMatch) {
+            inputDataObj.appointments = parseInt(appointmentsInboundMatch[1]);
+            inputDataObj.appointmentsSetInbound = parseInt(appointmentsInboundMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        // Handle "Log X appointments for today under inbound" pattern
+        if (lowerMessage.includes('log') && lowerMessage.includes('appointments') && lowerMessage.includes('under') && lowerMessage.includes('inbound')) {
+          const logAppointmentsInboundMatch = message.match(/log\s+(\d+)\s+appointments?\s+.*under\s+inbound/i);
+          if (logAppointmentsInboundMatch) {
+            inputDataObj.appointments = parseInt(logAppointmentsInboundMatch[1]);
+            inputDataObj.appointmentsSetInbound = parseInt(logAppointmentsInboundMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        // Handle "Log X deals from inbound" pattern
+        if (lowerMessage.includes('log') && lowerMessage.includes('deals') && lowerMessage.includes('from') && lowerMessage.includes('inbound')) {
+          const logDealsInboundMatch = message.match(/log\s+(\d+)\s+deals?\s+.*from\s+inbound/i);
+          if (logDealsInboundMatch) {
+            inputDataObj.closedDeals = parseInt(logDealsInboundMatch[1]);
+            inputDataObj.dealsClosedInbound = parseInt(logDealsInboundMatch[1]);
+            hasData = true;
+          }
+        }
+        
+        // Handle "Log X accounts from referrals" pattern
+        if (lowerMessage.includes('log') && lowerMessage.includes('account') && lowerMessage.includes('from') && lowerMessage.includes('referral')) {
+          const logAccountsReferralMatch = message.match(/log\s+(\d+)\s+accounts?\s+.*from\s+referrals?/i);
+          if (logAccountsReferralMatch) {
+            inputDataObj.accountsServiced = parseInt(logAccountsReferralMatch[1]);
+            inputDataObj.accountsServicedReferrals = parseInt(logAccountsReferralMatch[1]);
             hasData = true;
           }
         }
