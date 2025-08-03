@@ -245,17 +245,26 @@ app.post('/api/jessica-chat-message', async (req, res) => {
       });
       
       try {
-        const systemPrompt = `You are Jessica, a helpful assistant who supports users with lead input, KPIs, appointments, and business operations. Respond naturally and flexibly like ChatGPT. Always infer context and help with initiative.
+        const systemPrompt = `You are Jessica, an intelligent AI assistant like ChatGPT who helps 1099 contractors track their business metrics. You understand natural language, slang, abbreviations, and corrections. Be conversational and helpful.
 
-When users share their business activities, extract and log the relevant data while providing natural, conversational responses.
+When users share their business activities, extract KPI data from ANY phrasing while providing natural, encouraging responses.
 
 **Data Extraction Instructions:**
-Extract the following key-value pairs from the user's message. Only include fields that have values > 0:
+Understand ANY natural language input - be flexible with slang, abbreviations, typos, and informal language. Extract numbers and their context even from very casual messages.
 
-**CRITICAL**: When a source is specified (e.g., "from inbound", "from door knocks", "from referrals"), ALWAYS extract BOTH the main field AND the corresponding sub-field:
-- "2 appointments from inbound" → appointments: 2, appointmentsSetInbound: 2
-- "3 deals from inbound" → closedDeals: 3, dealsClosedInbound: 3
-- "1 account from referrals" → accountsServiced: 1, accountsServicedReferrals: 1
+Examples of inputs you MUST understand:
+- "knocked 60, set 2, held 1, no close" → doorsKnocked: 60, appointments: 2, appointmentHolds: 1
+- "3 from door knocks, held 1, closed none" → appointments: 3, appointmentsSetDoorKnocks: 3, appointmentHolds: 1
+- "dk 25, apt 3" → doorsKnocked: 25, appointments: 3
+- "closed 2 deals!!! 🎉" → closedDeals: 2
+- "just finished 8 hrs" → hoursWorked: 8
+
+**Corrections & Context:**
+- "No, that was yesterday" → Clear previous data, wait for new input
+- "Actually 2 not 4" → Update the value to 2
+- "I meant door knocks not calls" → Update source attribution
+
+Extract these KPIs (only include > 0):
 
 **Main Metrics:**
 - doorsKnocked: Total doors knocked
@@ -337,31 +346,37 @@ Extract the following key-value pairs from the user's message. Only include fiel
 - **"1 account from inbound" → accountsServiced: 1, accountsServicedInbound: 1**
 
 **Response Format:**
-If you can extract data, respond with PURE JSON only, no additional text:
+ALWAYS provide a natural, conversational response regardless of whether you extract data.
+
+If data was extracted:
+- Respond naturally: "Got it! I've logged your 60 door knocks and 2 appointments set. Keep crushing it! 💪"
+- Don't use rigid templates
+- Be encouraging and personalized
+- Confirm what was understood
+
+If handling corrections:
+- "Updated that to 2 appointments instead of 4. Anything else to adjust?"
+
+If unclear:
+- "I want to make sure I log this correctly. Did you set 3 appointments total, or was that from a specific source?"
+
+Remember: You're like ChatGPT - be helpful, natural, and intelligent. Never respond with just JSON or robotic confirmations.
+
+**IMPORTANT OUTPUT FORMAT:**
+You MUST respond with a JSON object containing:
 {
-  "doorsKnocked": 25,
-  "appointments": 3,
-  "appointmentHolds": 1,
-  "closedDeals": 2,
-  "accountsServiced": 1,
-  "hoursWorked": 8,
-  "outreachDoorKnocks": 15,
-  "outreachCallsMade": 25,
-  "outreachInbound": 25,
-  "appointmentsSetDoorKnocks": 2,
-  "appointmentsHeldReferrals": 1,
-  "dealsClosedInbound": 1
+  "message": "Your natural, conversational response here",
+  "extractedData": {
+    // Only include fields with values > 0
+    "doorsKnocked": 60,
+    "appointments": 2,
+    "appointmentsSetDoorKnocks": 2,
+    // etc...
+  }
 }
 
-If you cannot extract specific data, provide a natural, helpful response that guides the user toward better input.
-
-**Natural Communication Guidelines:**
-- Be conversational and engaging
-- Acknowledge the user's work and progress
-- Provide context-aware suggestions
-- Handle vague inputs gracefully with helpful guidance
-- Use natural language, not rigid templates
-- Show initiative in helping users achieve their goals`;
+The "message" field should contain your natural language response.
+The "extractedData" field should contain the KPI data you extracted (empty object {} if no data).`;
 
         console.log('[Jessica] Making OpenAI API call...');
         const aiResponse = await openai.chat.completions.create({
@@ -380,43 +395,29 @@ If you cannot extract specific data, provide a natural, helpful response that gu
 
         if (aiContent) {
           try {
-            // Try to parse as JSON first (for data extraction)
+            // Parse the structured JSON response
+            let parsedResponse = {};
             let extractedData = {};
             let naturalResponse = aiContent;
             
             try {
-              extractedData = JSON.parse(aiContent);
-              console.log('[Jessica] Parsed AI response as JSON:', extractedData);
+              parsedResponse = JSON.parse(aiContent);
+              console.log('[Jessica] Parsed AI response:', parsedResponse);
               
-              // If we got JSON data, build a natural response
-              const activities = [];
-              if (extractedData.doorsKnocked > 0) activities.push(`${extractedData.doorsKnocked} doors knocked`);
-              if (extractedData.appointments > 0) activities.push(`${extractedData.appointments} appointments set`);
-              if (extractedData.appointmentHolds > 0) activities.push(`${extractedData.appointmentHolds} appointments held`);
-              if (extractedData.closedDeals > 0) activities.push(`${extractedData.closedDeals} deals closed`);
-              if (extractedData.accountsServiced > 0) activities.push(`${extractedData.accountsServiced} accounts serviced`);
-              if (extractedData.hoursWorked > 0) activities.push(`${extractedData.hoursWorked} hours worked`);
-              
-              if (activities.length > 0) {
-                // Check if user is using additive language
-                const lowerMessage = message.toLowerCase();
-                const isAdditive = lowerMessage.includes('more') || 
-                                 lowerMessage.includes('additional') || 
-                                 lowerMessage.includes('extra') || 
-                                 lowerMessage.includes('another') ||
-                                 lowerMessage.includes('plus') ||
-                                 lowerMessage.includes('also');
-                
-                if (isAdditive) {
-                  naturalResponse = `🎉 Great! I've added ${activities.join(', ')} to your totals for today. Keep building momentum!`;
-                } else {
-                  naturalResponse = `🎉 Great work! I've logged ${activities.join(', ')} for today. You're making excellent progress! Keep up the momentum!`;
-                }
+              // Extract the message and data from the structured response
+              if (parsedResponse.message) {
+                naturalResponse = parsedResponse.message;
+                extractedData = parsedResponse.extractedData || {};
+              } else {
+                // Fallback: if AI didn't follow format, treat entire response as message
+                naturalResponse = aiContent;
+                extractedData = {};
               }
             } catch (parseError) {
-              // If not JSON, use the natural response as-is
-              console.log('[Jessica] Using natural AI response:', aiContent);
+              // If not JSON, use the entire response as the message
+              console.log('[Jessica] AI response not JSON, using as natural language:', aiContent);
               naturalResponse = aiContent;
+              extractedData = {};
             }
 
             // Ensure all required fields are present with defaults
@@ -457,123 +458,24 @@ If you cannot extract specific data, provide a natural, helpful response that gu
               ...extractedData
             };
 
-            if (supabase && userId) {
-              console.log('[Jessica] Saving to Supabase for user:', userId);
-              const today = new Date().toISOString().split('T')[0];
-              
-              // Check for existing data
-              const { data: existingData, error: fetchError } = await supabase
-                .from('daily_inputs')
-                .select('*')
-                .eq('user_id', userId)
-                .eq('date', today)
-                .single();
+            response = {
+              reply: aiContent,
+              extractedData: Object.keys(completeData).reduce((acc, key) => {
+                if (completeData[key] > 0) {
+                  acc[key] = completeData[key];
+                }
+                return acc;
+              }, {}),
+              hasData: Object.keys(extractedData).length > 0,
+              isAdditive: (message.toLowerCase().includes('more') || 
+                          message.toLowerCase().includes('additional') || 
+                          message.toLowerCase().includes('extra') || 
+                          message.toLowerCase().includes('another') ||
+                          message.toLowerCase().includes('plus') ||
+                          message.toLowerCase().includes('also'))
+            };
 
-              if (fetchError && fetchError.code !== 'PGRST116') {
-                console.error('[Jessica] Error fetching existing data:', fetchError);
-              }
-
-              // Prepare upsert data with proper field mapping
-              const upsertData = {
-                user_id: userId,
-                date: today,
-                doors_knocked: completeData.doorsKnocked,
-                appointments: completeData.appointments,
-                appointment_holds: completeData.appointmentHolds,
-                closed_deals: completeData.closedDeals,
-                accounts_serviced: completeData.accountsServiced,
-                hours_worked: completeData.hoursWorked,
-                notes: completeData.notes,
-                // Sub-input fields
-                outreach_door_knocks: completeData.outreachDoorKnocks,
-                outreach_tags_put: completeData.outreachTagsPut,
-                outreach_calls_made: completeData.outreachCallsMade,
-                outreach_referrals: completeData.outreachReferrals,
-                outreach_inbound: completeData.outreachInbound,
-                appointments_set_door_knocks: completeData.appointmentsSetDoorKnocks,
-                appointments_set_tags_put: completeData.appointmentsSetTagsPut,
-                appointments_set_calls_made: completeData.appointmentsSetCallsMade,
-                appointments_set_referrals: completeData.appointmentsSetReferrals,
-                appointments_set_inbound: completeData.appointmentsSetInbound,
-                appointments_held_door_knocks: completeData.appointmentsHeldDoorKnocks,
-                appointments_held_tags_put: completeData.appointmentsHeldTagsPut,
-                appointments_held_calls_made: completeData.appointmentsHeldCallsMade,
-                appointments_held_referrals: completeData.appointmentsHeldReferrals,
-                appointments_held_inbound: completeData.appointmentsHeldInbound,
-                deals_closed_door_knocks: completeData.dealsClosedDoorKnocks,
-                deals_closed_tags_put: completeData.dealsClosedTagsPut,
-                deals_closed_calls_made: completeData.dealsClosedCallsMade,
-                deals_closed_referrals: completeData.dealsClosedReferrals,
-                deals_closed_inbound: completeData.dealsClosedInbound,
-                accounts_serviced_door_knocks: completeData.accountsServicedDoorKnocks,
-                accounts_serviced_tags_put: completeData.accountsServicedTagsPut,
-                accounts_serviced_calls_made: completeData.accountsServicedCallsMade,
-                accounts_serviced_referrals: completeData.accountsServicedReferrals,
-                accounts_serviced_inbound: completeData.accountsServicedInbound,
-              };
-
-              // If existing data, merge the values
-              if (existingData) {
-                console.log('[Jessica] Merging with existing data');
-                
-                // Check if user is using additive language
-                const lowerMessage = message.toLowerCase();
-                const isAdditive = lowerMessage.includes('more') || 
-                                 lowerMessage.includes('additional') || 
-                                 lowerMessage.includes('extra') || 
-                                 lowerMessage.includes('another') ||
-                                 lowerMessage.includes('plus') ||
-                                 lowerMessage.includes('also');
-                
-                console.log('[Jessica] Additive language detected:', isAdditive);
-                
-                Object.keys(completeData).forEach(key => {
-                  if (completeData[key] > 0) {
-                    const dbKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
-                    if (upsertData[dbKey] !== undefined) {
-                      if (isAdditive) {
-                        // Add to existing value
-                        upsertData[dbKey] = (existingData[dbKey] || 0) + completeData[key];
-                        console.log(`[Jessica] Adding ${completeData[key]} to existing ${dbKey}: ${existingData[dbKey] || 0} + ${completeData[key]} = ${upsertData[dbKey]}`);
-                      } else {
-                        // Replace existing value
-                        upsertData[dbKey] = completeData[key];
-                        console.log(`[Jessica] Replacing ${dbKey}: ${existingData[dbKey] || 0} → ${completeData[key]}`);
-                      }
-                    }
-                  }
-                });
-              }
-
-              const { data: saveData, error: saveError } = await supabase
-                .from('daily_inputs')
-                .upsert(upsertData, { onConflict: 'user_id,date' });
-
-              if (saveError) {
-                console.error('[Jessica] Error saving to Supabase:', saveError);
-              } else {
-                console.log('[Jessica] Successfully saved to Supabase:', saveData);
-              }
-            }
-
-            // Build response message
-            const activities = [];
-            if (completeData.doorsKnocked > 0) activities.push(`${completeData.doorsKnocked} doors knocked`);
-            if (completeData.appointments > 0) activities.push(`${completeData.appointments} appointments set`);
-            if (completeData.appointmentHolds > 0) activities.push(`${completeData.appointmentHolds} appointments held`);
-            if (completeData.closedDeals > 0) activities.push(`${completeData.closedDeals} deals closed`);
-            if (completeData.accountsServiced > 0) activities.push(`${completeData.accountsServiced} accounts serviced`);
-            if (completeData.hoursWorked > 0) activities.push(`${completeData.hoursWorked} hours worked`);
-
-            // Customize Jessica's response here
-            response = naturalResponse;
-
-            res.json({
-              response: response,
-              extractedData: completeData,
-              shouldSave: true,
-              timestamp: new Date().toISOString()
-            });
+            res.json(response);
             return;
 
           } catch (parseError) {
@@ -837,10 +739,10 @@ If you cannot extract specific data, provide a natural, helpful response that gu
           }
           
           res.json({
-            response: response,
+            reply: response,
             extractedData: inputDataObj,
-            shouldSave: true,
-            timestamp: new Date().toISOString()
+            hasData: true,
+            isAdditive: isAdditive
           });
           return;
         }
@@ -869,8 +771,10 @@ If you cannot extract specific data, provide a natural, helpful response that gu
     
     console.log(`[Jessica] Sending response: ${response.substring(0, 100)}...`);
     res.json({
-      response: response,
-      timestamp: new Date().toISOString()
+      reply: response,
+      hasData: false,
+      extractedData: {},
+      isAdditive: false
     });
   } catch (error) {
     console.error('[Jessica] Chat error:', error);
@@ -890,37 +794,33 @@ app.post('/api/jessica-chat-image', async (req, res) => {
     if (openai && process.env.OPENAI_API_KEY) {
       console.log('[Jessica] Using OpenAI for image analysis');
       try {
-        // Enhanced system prompt for business-focused image analysis
-        const systemPrompt = `You are Jessica, an AI assistant for a 1099 contractor management app. 
+        // Enhanced system prompt for KPI extraction from images
+        const systemPrompt = `You are Jessica, an intelligent AI assistant who helps contractors track their business metrics. You can analyze images and extract KPI data just like processing text.
         
-        Analyze the image and provide business-focused insights. Focus on:
+        Look for any of these in the image:
+        - Handwritten notes with numbers and activities
+        - CRM screenshots showing leads, appointments, deals
+        - Tally sheets or tracking boards
+        - Business metrics dashboards
+        - Written goals or daily totals
         
-        **Receipts & Expenses:**
-        - Extract business expense details (amount, date, vendor, items)
-        - Identify if it's a valid business expense
-        - Suggest appropriate expense categories
-        - Note if it's tax-deductible
+        Extract the same KPIs as text input:
+        - doorsKnocked, appointments, appointmentHolds, closedDeals, accountsServiced
+        - Source breakdowns (from door knocks, inbound, referrals, etc.)
         
-        **Mileage & Travel:**
-        - Identify if it's a mileage log, odometer reading, or travel-related
-        - Extract distance, dates, locations if visible
-        - Suggest business vs personal classification
+        **IMPORTANT OUTPUT FORMAT:**
+        Respond with JSON:
+        {
+          "message": "I can see your [describe what you see]. I've logged [summarize the data extracted]. [Encouraging comment]",
+          "extractedData": {
+            // Only include fields with values > 0
+            "doorsKnocked": 60,
+            "appointments": 3,
+            // etc...
+          }
+        }
         
-        **Business Documents:**
-        - Analyze contracts, invoices, business cards
-        - Extract contact information, amounts, dates
-        - Identify business opportunities or leads
-        
-        **Office/Work Environment:**
-        - Identify business equipment, supplies, workspace
-        - Suggest productivity improvements
-        - Note potential business deductions
-        
-        **General Business:**
-        - If not business-related, politely redirect to business topics
-        - Provide helpful business advice when appropriate
-        
-        Be specific, actionable, and business-focused. If you can extract data, format it clearly.`;
+        If you can't extract specific KPIs, still be helpful and explain what you see.`;
         
         const completion = await openai.chat.completions.create({
           model: "gpt-4o",
@@ -941,26 +841,53 @@ app.post('/api/jessica-chat-image', async (req, res) => {
           temperature: 0.7,
         });
         
-        response = completion.choices[0]?.message?.content || "I can see the image you've shared. Let me help you with business insights!";
+        const aiContent = completion.choices[0]?.message?.content || "{}";
         console.log('[Jessica] OpenAI image analysis completed');
+        
+        // Parse the AI response
+        try {
+          const parsedResponse = JSON.parse(aiContent);
+          response = parsedResponse.message || "I can see the image you've shared. Let me help you track your KPIs!";
+          
+          // Extract data if available
+          if (parsedResponse.extractedData && Object.keys(parsedResponse.extractedData).length > 0) {
+            console.log('[Jessica] Extracted data from image:', parsedResponse.extractedData);
+            
+            const isAdditive = lowerMessage.includes('more') || 
+                             lowerMessage.includes('additional') || 
+                             lowerMessage.includes('extra') || 
+                             lowerMessage.includes('another') ||
+                             lowerMessage.includes('plus') ||
+                             lowerMessage.includes('also');
+            
+            res.json({
+              reply: response,
+              hasData: true,
+              extractedData: parsedResponse.extractedData,
+              isAdditive: isAdditive
+            });
+            return;
+          }
+        } catch (parseError) {
+          console.log('[Jessica] Image analysis response not JSON:', aiContent);
+          response = aiContent;
+        }
       } catch (openaiError) {
         console.error('[Jessica] OpenAI image analysis error:', openaiError);
-        response = "I can see the image you've shared. I'm still learning to process images, but I can help you with text-based questions about business management, expenses, and tax deductions!";
+        response = "I can see the image you've shared. I'm still learning to process images, but I can help you track your KPIs through text!";
       }
     } else {
       console.log('[Jessica] Using enhanced fallback response for image (no OpenAI)');
       
       // Enhanced fallback responses based on message keywords
-      if (lowerMessage.includes('receipt') || lowerMessage.includes('expense') || lowerMessage.includes('bill')) {
-        response = "I can see you've shared what looks like a receipt or expense document. While I can't analyze the image details without advanced AI, I can help you log this expense! Just tell me the amount and description, like 'Add $25 expense for office supplies' or 'Log $50 for gas receipt'.";
-      } else if (lowerMessage.includes('mileage') || lowerMessage.includes('odometer') || lowerMessage.includes('trip')) {
-        response = "I can see you've shared what looks like a mileage or travel-related image. While I can't read the specific details, I can help you log this mileage! Just tell me the distance and purpose, like 'Add 15 miles for client meeting' or 'Log 25 miles business trip'.";
-      } else if (lowerMessage.includes('business card') || lowerMessage.includes('contact') || lowerMessage.includes('lead')) {
-        response = "I can see you've shared what looks like a business card or contact information. While I can't read the specific details, I can help you add this as a lead! Just tell me the name and company, like 'Add lead John Smith from ABC Corp' or 'Add client Jane Doe'.";
-      } else if (lowerMessage.includes('office') || lowerMessage.includes('workspace') || lowerMessage.includes('equipment')) {
-        response = "I can see you've shared what looks like an office or workspace image. This could be relevant for business deductions! Consider tracking expenses for office supplies, equipment, or workspace improvements. I can help you log these as business expenses.";
+      if (lowerMessage.includes('notes') || lowerMessage.includes('tally') || lowerMessage.includes('tracking')) {
+        response = "I can see you've shared what looks like tracking notes or a tally sheet. While I can't read the specific numbers without AI, just type out what you tracked! Like 'knocked 60, set 2, held 1' or whatever your totals were.";
+      } else if (lowerMessage.includes('crm') || lowerMessage.includes('dashboard') || lowerMessage.includes('screenshot')) {
+        response = "I can see you've shared what looks like a CRM screenshot or dashboard. Just tell me the numbers you want to log! For example: '3 appointments set, 1 held, 2 deals closed' and I'll update your KPIs.";
+      } else if (lowerMessage.includes('handwritten') || lowerMessage.includes('written') || lowerMessage.includes('notes')) {
+        response = "I can see you've shared handwritten notes. Just type out the numbers and I'll log them! For example: 'dk 25, apt 3, held 1' or however you track your activities.";
       } else {
-        response = "I can see the image you've shared. While I can't analyze the specific details without advanced AI, I can help you with business-related tasks! Try saying things like:\n• 'Add $50 expense for gas'\n• 'Log 15 miles for client meeting'\n• 'Add lead John Smith'\n• 'What are my business expenses?'";
+        response = "I can see the image you've shared. To help you track your KPIs, just type out what you want to log! For example:\n• 'knocked 60, set 2, held 1'\n• '3 deals closed from inbound'\n• 'worked 8 hours today'\n• 'closed 1, no shows 2'";
       }
     }
     
@@ -969,8 +896,10 @@ app.post('/api/jessica-chat-image', async (req, res) => {
     
     console.log(`[Jessica] Sending image response: ${response.substring(0, 100)}...`);
     res.json({
-      response: response,
-      timestamp: new Date().toISOString()
+      reply: response,
+      hasData: false,
+      extractedData: {},
+      isAdditive: false
     });
   } catch (error) {
     console.error('[Jessica] Image chat error:', error);
