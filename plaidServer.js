@@ -138,49 +138,563 @@ app.get('/health', (req, res) => {
 
 // Plaid: Exchange Public Token
 app.post('/api/exchange-public-token', async (req, res) => {
-  const { public_token, user_id } = req.body;
+  const { public_token, user_id, metadata } = req.body;
+  console.log(`[Plaid] Exchanging public token for user ${user_id}`);
+  
   try {
+    // Exchange public token for access token
     const tokenResponse = await plaidClient.itemPublicTokenExchange({ public_token });
     const accessToken = tokenResponse.data.access_token;
+    const itemId = tokenResponse.data.item_id;
     
-    if (supabase) {
-      await supabase.from('plaid_tokens').upsert({ user_id, access_token: accessToken });
-    } else {
-      console.warn('[Plaid] Supabase not configured, skipping token storage');
+    // Get item details for institution info
+    let institutionName = null;
+    let institutionId = null;
+    
+    if (metadata?.institution) {
+      institutionName = metadata.institution.name;
+      institutionId = metadata.institution.institution_id;
     }
     
-    res.status(200).json({ access_token: accessToken, message: 'Access token stored successfully.' });
+    if (supabase) {
+      // Store the access token persistently
+      const { error: tokenError } = await supabase.from('plaid_items').upsert({
+        user_id,
+        access_token: accessToken,
+        item_id: itemId,
+        institution_name: institutionName,
+        institution_id: institutionId,
+        last_sync_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id,item_id'
+      });
+      
+      if (tokenError) {
+        console.error('[Plaid] Error storing token:', tokenError);
+        return res.status(500).json({ error: 'Failed to store access token' });
+      }
+      
+      // Get accounts for this item
+      try {
+        const accountsResponse = await plaidClient.accountsGet({ access_token: accessToken });
+        const accounts = accountsResponse.data.accounts;
+        
+        // Get the plaid_item_id we just created
+        const { data: plaidItem } = await supabase
+          .from('plaid_items')
+          .select('id')
+          .eq('user_id', user_id)
+          .eq('item_id', itemId)
+          .single();
+        
+        if (plaidItem && accounts.length > 0) {
+          // Store accounts
+          const accountsToInsert = accounts.map(account => ({
+            plaid_item_id: plaidItem.id,
+            account_id: account.account_id,
+            name: account.name,
+            official_name: account.official_name,
+            type: account.type,
+            subtype: account.subtype,
+            mask: account.mask,
+            current_balance: account.balances.current,
+            available_balance: account.balances.available,
+            iso_currency_code: account.balances.iso_currency_code
+          }));
+          
+          await supabase.from('plaid_accounts').upsert(accountsToInsert, {
+            onConflict: 'plaid_item_id,account_id'
+          });
+        }
+        
+        // Perform initial transaction sync
+        console.log('[Plaid] Performing initial transaction sync...');
+        const syncResult = await performTransactionSync(user_id, accessToken, itemId, plaidItem?.id);
+        
+        res.status(200).json({ 
+          success: true,
+          message: 'Bank account linked successfully',
+          institution: institutionName,
+          accounts: accounts.length,
+          transactions_synced: syncResult.added
+        });
+        
+      } catch (accountError) {
+        console.error('[Plaid] Error fetching accounts:', accountError);
+        // Still return success since token was stored
+        res.status(200).json({ 
+          success: true,
+          message: 'Access token stored, but failed to fetch accounts',
+          warning: accountError.message
+        });
+      }
+    } else {
+      console.warn('[Plaid] Supabase not configured, skipping token storage');
+      res.status(200).json({ access_token: accessToken, message: 'Access token generated but not stored.' });
+    }
   } catch (error) {
-    console.error('Exchange error:', error);
-    res.status(500).json({ error: 'Token exchange failed' });
+    console.error('[Plaid] Exchange error:', error);
+    res.status(500).json({ error: 'Token exchange failed', details: error.message });
   }
 });
 
-// Plaid: Get Transactions
+// Transaction sync function
+async function performTransactionSync(userId, accessToken, itemId, plaidItemId) {
+  const syncLog = {
+    user_id: userId,
+    plaid_item_id: plaidItemId,
+    sync_started_at: new Date().toISOString(),
+    transactions_added: 0,
+    transactions_modified: 0,
+    transactions_removed: 0
+  };
+  
+  try {
+    // Get the cursor for incremental updates
+    const { data: plaidItem } = await supabase
+      .from('plaid_items')
+      .select('cursor')
+      .eq('id', plaidItemId)
+      .single();
+    
+    let cursor = plaidItem?.cursor;
+    let hasMore = true;
+    let added = [];
+    let modified = [];
+    let removed = [];
+    
+    // Use transactions sync endpoint for incremental updates
+    while (hasMore) {
+      const request = cursor ? { access_token: accessToken, cursor } : { access_token: accessToken };
+      
+      try {
+        const response = await plaidClient.transactionsSync(request);
+        
+        added = added.concat(response.data.added);
+        modified = modified.concat(response.data.modified);
+        removed = removed.concat(response.data.removed);
+        
+        hasMore = response.data.has_more;
+        cursor = response.data.next_cursor;
+      } catch (syncError) {
+        // If sync fails, fall back to regular get
+        console.log('[Plaid] Sync failed, falling back to regular get:', syncError.message);
+        const fallbackResponse = await plaidClient.transactionsGet({
+          access_token: accessToken,
+          start_date: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          end_date: new Date().toISOString().split('T')[0]
+        });
+        
+        added = fallbackResponse.data.transactions;
+        hasMore = false;
+      }
+    }
+    
+    // Process added transactions
+    if (added.length > 0) {
+      const transactionsToInsert = added.map(transaction => ({
+        user_id: userId,
+        transaction_id: transaction.transaction_id,
+        account_id: transaction.account_id,
+        amount: transaction.amount,
+        date: transaction.date,
+        authorized_date: transaction.authorized_date,
+        datetime: transaction.datetime,
+        name: transaction.name,
+        merchant_name: transaction.merchant_name,
+        payment_channel: transaction.payment_channel,
+        pending: transaction.pending,
+        primary_category: transaction.personal_finance_category?.primary,
+        detailed_category: transaction.personal_finance_category?.detailed,
+        category_confidence: transaction.personal_finance_category?.confidence_level,
+        is_income: transaction.amount < 0, // Negative amounts are income in Plaid
+        location_address: transaction.location?.address,
+        location_city: transaction.location?.city,
+        location_region: transaction.location?.region,
+        location_postal_code: transaction.location?.postal_code,
+        location_country: transaction.location?.country,
+        location_lat: transaction.location?.lat,
+        location_lon: transaction.location?.lon
+      }));
+      
+      const { error: insertError } = await supabase
+        .from('transactions')
+        .upsert(transactionsToInsert, {
+          onConflict: 'user_id,transaction_id'
+        });
+      
+      if (insertError) {
+        console.error('[Plaid] Error inserting transactions:', insertError);
+      } else {
+        syncLog.transactions_added = added.length;
+      }
+    }
+    
+    // Process modified transactions
+    if (modified.length > 0) {
+      // Update existing transactions
+      for (const transaction of modified) {
+        await supabase
+          .from('transactions')
+          .update({
+            amount: transaction.amount,
+            date: transaction.date,
+            name: transaction.name,
+            merchant_name: transaction.merchant_name,
+            pending: transaction.pending,
+            primary_category: transaction.personal_finance_category?.primary,
+            detailed_category: transaction.personal_finance_category?.detailed,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', userId)
+          .eq('transaction_id', transaction.transaction_id);
+      }
+      syncLog.transactions_modified = modified.length;
+    }
+    
+    // Process removed transactions
+    if (removed.length > 0) {
+      const removedIds = removed.map(r => r.transaction_id);
+      await supabase
+        .from('transactions')
+        .delete()
+        .eq('user_id', userId)
+        .in('transaction_id', removedIds);
+      
+      syncLog.transactions_removed = removed.length;
+    }
+    
+    // Update cursor and last sync time
+    if (cursor) {
+      await supabase
+        .from('plaid_items')
+        .update({
+          cursor: cursor,
+          last_sync_at: new Date().toISOString()
+        })
+        .eq('id', plaidItemId);
+    }
+    
+    // Log the sync
+    syncLog.sync_completed_at = new Date().toISOString();
+    await supabase.from('transaction_sync_log').insert(syncLog);
+    
+    console.log(`[Plaid] Sync completed: ${syncLog.transactions_added} added, ${syncLog.transactions_modified} modified, ${syncLog.transactions_removed} removed`);
+    
+    return {
+      added: syncLog.transactions_added,
+      modified: syncLog.transactions_modified,
+      removed: syncLog.transactions_removed
+    };
+    
+  } catch (error) {
+    console.error('[Plaid] Sync error:', error);
+    syncLog.error_message = error.message;
+    syncLog.sync_completed_at = new Date().toISOString();
+    await supabase.from('transaction_sync_log').insert(syncLog);
+    throw error;
+  }
+}
+
+// Plaid: Get Transactions with automatic sync
 app.get('/api/transactions', async (req, res) => {
-  const { user_id, start_date, end_date } = req.query;
+  const { user_id, start_date, end_date, sync = 'true' } = req.query;
   
   if (!supabase) {
-    return res.status(503).json({ error: 'Database not configured. Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.' });
+    return res.status(503).json({ error: 'Database not configured.' });
   }
   
-  const { data, error } = await supabase
-    .from('plaid_tokens')
-    .select('access_token')
-    .eq('user_id', user_id)
-    .single();
-  if (error || !data) return res.status(404).json({ error: 'Access token not found.' });
-
   try {
-    const transactionsResponse = await plaidClient.transactionsGet({
-      access_token: data.access_token,
-      start_date: start_date || '2023-01-01',
-      end_date: end_date || new Date().toISOString().split('T')[0],
+    // Get all plaid items for user
+    const { data: plaidItems, error: itemError } = await supabase
+      .from('plaid_items')
+      .select('id, access_token, item_id, last_sync_at')
+      .eq('user_id', user_id);
+    
+    if (itemError || !plaidItems || plaidItems.length === 0) {
+      return res.status(404).json({ error: 'No linked bank accounts found.' });
+    }
+    
+    // Sync transactions if requested (default true)
+    if (sync === 'true') {
+      for (const item of plaidItems) {
+        // Only sync if last sync was more than 1 hour ago
+        const lastSync = item.last_sync_at ? new Date(item.last_sync_at) : new Date(0);
+        const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        
+        if (lastSync < hourAgo) {
+          try {
+            await performTransactionSync(user_id, item.access_token, item.item_id, item.id);
+          } catch (syncError) {
+            console.error(`[Plaid] Failed to sync item ${item.id}:`, syncError.message);
+          }
+        }
+      }
+    }
+    
+    // Fetch transactions from database
+    let query = supabase
+      .from('transactions')
+      .select(`
+        *,
+        plaid_account:plaid_accounts(
+          name,
+          official_name,
+          type,
+          subtype,
+          mask
+        )
+      `)
+      .eq('user_id', user_id)
+      .order('date', { ascending: false });
+    
+    // Apply date filters
+    if (start_date) {
+      query = query.gte('date', start_date);
+    }
+    if (end_date) {
+      query = query.lte('date', end_date);
+    }
+    
+    const { data: transactions, error: txError } = await query;
+    
+    if (txError) {
+      throw txError;
+    }
+    
+    res.json({
+      transactions: transactions || [],
+      count: transactions?.length || 0,
+      synced: sync === 'true'
     });
-    res.json(transactionsResponse.data.transactions);
+    
   } catch (err) {
-    console.error('Transaction fetch error:', err);
-    res.status(500).json({ error: 'Failed to fetch transactions.' });
+    console.error('[Plaid] Transaction fetch error:', err);
+    res.status(500).json({ error: 'Failed to fetch transactions.', details: err.message });
+  }
+});
+
+// Plaid: Update Transaction Category
+app.patch('/api/transactions/:transactionId', async (req, res) => {
+  const { transactionId } = req.params;
+  const { user_id, is_business, business_category, tax_category, user_category, user_notes, tags } = req.body;
+  
+  if (!supabase) {
+    return res.status(503).json({ error: 'Database not configured.' });
+  }
+  
+  try {
+    const { data, error } = await supabase
+      .from('transactions')
+      .update({
+        is_business,
+        business_category,
+        tax_category,
+        user_category,
+        user_notes,
+        tags,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', transactionId)
+      .eq('user_id', user_id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    res.json({ success: true, transaction: data });
+  } catch (error) {
+    console.error('[Plaid] Error updating transaction:', error);
+    res.status(500).json({ error: 'Failed to update transaction' });
+  }
+});
+
+// Plaid: Create/Update Categorization Rule
+app.post('/api/categorization-rules', async (req, res) => {
+  const { user_id, rule_type, rule_value, is_business, business_category, tax_category, tags, priority } = req.body;
+  
+  if (!supabase) {
+    return res.status(503).json({ error: 'Database not configured.' });
+  }
+  
+  try {
+    const { data, error } = await supabase
+      .from('categorization_rules')
+      .insert({
+        user_id,
+        rule_type,
+        rule_value,
+        is_business,
+        business_category,
+        tax_category,
+        tags,
+        priority: priority || 0
+      })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    // Apply rule to existing transactions
+    if (data) {
+      const { count } = await applyRuleToExistingTransactions(user_id, data);
+      res.json({ success: true, rule: data, transactions_updated: count });
+    } else {
+      res.json({ success: true, rule: data });
+    }
+  } catch (error) {
+    console.error('[Plaid] Error creating rule:', error);
+    res.status(500).json({ error: 'Failed to create categorization rule' });
+  }
+});
+
+// Helper function to apply rule to existing transactions
+async function applyRuleToExistingTransactions(userId, rule) {
+  let query = supabase
+    .from('transactions')
+    .select('id, merchant_name, name, primary_category, amount')
+    .eq('user_id', userId);
+  
+  const { data: transactions } = await query;
+  let updateCount = 0;
+  
+  if (transactions) {
+    for (const tx of transactions) {
+      let shouldUpdate = false;
+      
+      switch (rule.rule_type) {
+        case 'merchant':
+          shouldUpdate = tx.merchant_name && tx.merchant_name.toLowerCase().includes(rule.rule_value.toLowerCase());
+          break;
+        case 'category':
+          shouldUpdate = tx.primary_category === rule.rule_value;
+          break;
+        case 'keyword':
+          shouldUpdate = (tx.name && tx.name.toLowerCase().includes(rule.rule_value.toLowerCase())) ||
+                        (tx.merchant_name && tx.merchant_name.toLowerCase().includes(rule.rule_value.toLowerCase()));
+          break;
+        case 'amount':
+          shouldUpdate = tx.amount.toString() === rule.rule_value;
+          break;
+      }
+      
+      if (shouldUpdate) {
+        await supabase
+          .from('transactions')
+          .update({
+            is_business: rule.is_business,
+            business_category: rule.business_category,
+            tax_category: rule.tax_category,
+            tags: rule.tags,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', tx.id);
+        
+        updateCount++;
+      }
+    }
+  }
+  
+  return { count: updateCount };
+}
+
+// Plaid: Get Categorization Rules
+app.get('/api/categorization-rules', async (req, res) => {
+  const { user_id } = req.query;
+  
+  if (!supabase) {
+    return res.status(503).json({ error: 'Database not configured.' });
+  }
+  
+  try {
+    const { data, error } = await supabase
+      .from('categorization_rules')
+      .select('*')
+      .eq('user_id', user_id)
+      .eq('is_active', true)
+      .order('priority', { ascending: false })
+      .order('created_at', { ascending: true });
+    
+    if (error) throw error;
+    
+    res.json({ rules: data || [] });
+  } catch (error) {
+    console.error('[Plaid] Error fetching rules:', error);
+    res.status(500).json({ error: 'Failed to fetch categorization rules' });
+  }
+});
+
+// Plaid: Get Transaction Summary
+app.get('/api/transaction-summary', async (req, res) => {
+  const { user_id, month } = req.query;
+  
+  if (!supabase) {
+    return res.status(503).json({ error: 'Database not configured.' });
+  }
+  
+  try {
+    let query = supabase
+      .from('transaction_summaries')
+      .select('*')
+      .eq('user_id', user_id);
+    
+    if (month) {
+      query = query.eq('month', month);
+    } else {
+      // Get last 12 months
+      const twelveMonthsAgo = new Date();
+      twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+      query = query.gte('month', twelveMonthsAgo.toISOString().split('T')[0]);
+    }
+    
+    const { data, error } = await query.order('month', { ascending: false });
+    
+    if (error) throw error;
+    
+    res.json({ summaries: data || [] });
+  } catch (error) {
+    console.error('[Plaid] Error fetching summary:', error);
+    res.status(500).json({ error: 'Failed to fetch transaction summary' });
+  }
+});
+
+// Plaid: Check for existing linked accounts
+app.get('/api/plaid/linked-accounts', async (req, res) => {
+  const { user_id } = req.query;
+  
+  if (!supabase) {
+    return res.status(503).json({ error: 'Database not configured.' });
+  }
+  
+  try {
+    const { data, error } = await supabase
+      .from('plaid_items')
+      .select(`
+        id,
+        institution_name,
+        last_sync_at,
+        created_at,
+        plaid_accounts (
+          id,
+          name,
+          official_name,
+          type,
+          subtype,
+          mask,
+          current_balance
+        )
+      `)
+      .eq('user_id', user_id);
+    
+    if (error) throw error;
+    
+    res.json({ 
+      linked_accounts: data || [],
+      has_linked_accounts: data && data.length > 0
+    });
+  } catch (error) {
+    console.error('[Plaid] Error checking linked accounts:', error);
+    res.status(500).json({ error: 'Failed to check linked accounts' });
   }
 });
 
@@ -245,9 +759,21 @@ app.post('/api/jessica-chat-message', async (req, res) => {
       });
       
       try {
+cursor/parse-natural-language-and-update-ui-inputs-db09
         const systemPrompt = `You are Jessica, an intelligent AI assistant like ChatGPT who helps 1099 contractors track their business metrics. You understand natural language, slang, abbreviations, and corrections. Be conversational and helpful.
 
 When users share their business activities, extract KPI data from ANY phrasing while providing natural, encouraging responses.
+
+
+When users share their business activities or ask about transactions, extract and process the relevant data while providing natural, conversational responses.
+
+For transaction-related queries:
+- Help categorize transactions as business or personal
+- Apply smart rules based on merchant names or patterns
+- Provide summaries of expenses and income
+- Answer questions about spending patterns
+- Help create categorization rules for recurring vendors
+main
 
 **Data Extraction Instructions:**
 Understand ANY natural language input - be flexible with slang, abbreviations, typos, and informal language. Extract numbers and their context even from very casual messages.
@@ -904,6 +1430,303 @@ app.post('/api/jessica-chat-image', async (req, res) => {
   } catch (error) {
     console.error('[Jessica] Image chat error:', error);
     res.status(500).json({ error: 'Failed to process image' });
+  }
+});
+
+// Jessica Transaction Processing
+app.post('/api/jessica-process-transaction', async (req, res) => {
+  const { message, userId, transactionData } = req.body;
+  console.log(`[Jessica] Processing transaction request from user ${userId}`);
+  
+  try {
+    // Parse the natural language command
+    const lowerMessage = message.toLowerCase();
+    let response = { success: false, message: '', actions: [] };
+    
+    // Check for transaction categorization commands
+    if (lowerMessage.includes('business') || lowerMessage.includes('personal')) {
+      const isBusiness = lowerMessage.includes('business');
+      
+      // Handle specific transaction update
+      if (transactionData && transactionData.id) {
+        const { error } = await supabase
+          .from('transactions')
+          .update({ 
+            is_business: isBusiness,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', transactionData.id)
+          .eq('user_id', userId);
+        
+        if (!error) {
+          response.success = true;
+          response.message = `Updated ${transactionData.merchant_name || 'transaction'} as ${isBusiness ? 'business' : 'personal'}.`;
+          response.actions.push({ type: 'update_transaction', id: transactionData.id, is_business: isBusiness });
+        }
+      }
+      
+      // Handle merchant-based rules
+      const merchantMatch = message.match(/all\s+(\w+)\s+(?:charges?|transactions?|purchases?)/i);
+      if (merchantMatch) {
+        const merchant = merchantMatch[1];
+        
+        // Create categorization rule
+        const { data: rule, error: ruleError } = await supabase
+          .from('categorization_rules')
+          .insert({
+            user_id: userId,
+            rule_type: 'merchant',
+            rule_value: merchant,
+            is_business: isBusiness,
+            priority: 1
+          })
+          .select()
+          .single();
+        
+        if (!ruleError && rule) {
+          // Apply to existing transactions
+          const { count } = await applyRuleToExistingTransactions(userId, rule);
+          
+          response.success = true;
+          response.message = `Created rule: All ${merchant} transactions will be marked as ${isBusiness ? 'business' : 'personal'}. Updated ${count} existing transactions.`;
+          response.actions.push({ type: 'create_rule', rule_id: rule.id, updated_count: count });
+        }
+      }
+    }
+    
+    // Handle expense summary requests
+    if (lowerMessage.includes('how much') || lowerMessage.includes('total') || lowerMessage.includes('spent')) {
+      const timeframe = lowerMessage.includes('month') ? 'month' : lowerMessage.includes('year') ? 'year' : 'month';
+      const isBusinessQuery = lowerMessage.includes('business');
+      
+      // Get current month's summary
+      const currentMonth = new Date().toISOString().slice(0, 7) + '-01';
+      const { data: summary } = await supabase
+        .from('transaction_summaries')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('month', currentMonth)
+        .single();
+      
+      if (summary) {
+        const amount = isBusinessQuery ? summary.business_expenses : summary.total_expenses;
+        response.success = true;
+        response.message = `You've spent $${amount.toFixed(2)} on ${isBusinessQuery ? 'business expenses' : 'total expenses'} this month.`;
+        response.actions.push({ type: 'summary', amount, timeframe: 'month', category: isBusinessQuery ? 'business' : 'total' });
+      }
+    }
+    
+    // If we have OpenAI, use it for more complex queries
+    if (openai && !response.success) {
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: `You are Jessica, a financial assistant. Help the user with their transaction query. 
+            Available actions:
+            - Categorize transactions as business/personal
+            - Create rules for automatic categorization
+            - Provide expense summaries
+            - Answer questions about spending patterns
+            
+            Respond naturally and suggest specific actions the user can take.`
+          },
+          {
+            role: 'user',
+            content: message
+          }
+        ],
+        max_tokens: 200
+      });
+      
+      response.message = completion.choices[0]?.message?.content || 'I can help you categorize transactions. Try saying things like "Mark this as business" or "All Uber charges are business."';
+      response.success = true;
+    }
+    
+    if (!response.success) {
+      response.message = 'I can help you categorize transactions. Try saying things like "Mark this as business" or "All Uber charges are business."';
+    }
+    
+    res.json(response);
+    
+  } catch (error) {
+    console.error('[Jessica] Transaction processing error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Sorry, I encountered an error processing your request.',
+      error: error.message 
+    });
+  }
+});
+
+// Transaction Export Endpoints
+app.get('/api/export-transactions', async (req, res) => {
+  const { user_id, format = 'csv', start_date, end_date, business_only } = req.query;
+  
+  if (!supabase) {
+    return res.status(503).json({ error: 'Database not configured.' });
+  }
+  
+  try {
+    // Build query
+    let query = supabase
+      .from('transactions')
+      .select(`
+        *,
+        plaid_account:plaid_accounts(
+          name,
+          mask
+        )
+      `)
+      .eq('user_id', user_id)
+      .eq('pending', false)
+      .order('date', { ascending: false });
+    
+    // Apply filters
+    if (start_date) query = query.gte('date', start_date);
+    if (end_date) query = query.lte('date', end_date);
+    if (business_only === 'true') query = query.eq('is_business', true);
+    
+    const { data: transactions, error } = await query;
+    
+    if (error) throw error;
+    
+    if (format === 'csv') {
+      // Generate CSV
+      const csv = generateTransactionCSV(transactions);
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="transactions_${new Date().toISOString().split('T')[0]}.csv"`);
+      res.send(csv);
+    } else if (format === 'json') {
+      // Return JSON
+      res.json({
+        transactions,
+        count: transactions.length,
+        export_date: new Date().toISOString(),
+        filters: { start_date, end_date, business_only }
+      });
+    } else {
+      res.status(400).json({ error: 'Invalid format. Use csv or json.' });
+    }
+  } catch (error) {
+    console.error('[Export] Error:', error);
+    res.status(500).json({ error: 'Failed to export transactions' });
+  }
+});
+
+// Helper function to generate CSV
+function generateTransactionCSV(transactions) {
+  const headers = [
+    'Date',
+    'Merchant',
+    'Description',
+    'Amount',
+    'Type',
+    'Category',
+    'Business Category',
+    'Tax Category',
+    'Account',
+    'Notes'
+  ];
+  
+  const rows = transactions.map(tx => [
+    tx.date,
+    tx.merchant_name || tx.name,
+    tx.name,
+    Math.abs(tx.amount).toFixed(2),
+    tx.is_business ? 'Business' : 'Personal',
+    tx.primary_category || '',
+    tx.business_category || '',
+    tx.tax_category || '',
+    tx.plaid_account ? `${tx.plaid_account.name} •••${tx.plaid_account.mask}` : '',
+    tx.user_notes || ''
+  ]);
+  
+  // Escape CSV values
+  const escapeCSV = (value) => {
+    if (value === null || value === undefined) return '';
+    const str = String(value);
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+  
+  // Generate CSV string
+  const csvRows = [
+    headers.map(escapeCSV).join(','),
+    ...rows.map(row => row.map(escapeCSV).join(','))
+  ];
+  
+  return csvRows.join('\n');
+}
+
+// Transaction Report Generation
+app.post('/api/generate-report', async (req, res) => {
+  const { user_id, report_type, start_date, end_date } = req.body;
+  
+  if (!supabase) {
+    return res.status(503).json({ error: 'Database not configured.' });
+  }
+  
+  try {
+    // Fetch transaction summary data
+    const { data: summaries } = await supabase
+      .from('transaction_summaries')
+      .select('*')
+      .eq('user_id', user_id)
+      .gte('month', start_date)
+      .lte('month', end_date)
+      .order('month');
+    
+    // Fetch categorized transactions
+    const { data: transactions } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('user_id', user_id)
+      .eq('is_business', true)
+      .gte('date', start_date)
+      .lte('date', end_date)
+      .order('date');
+    
+    // Group by category
+    const categoryTotals = {};
+    transactions.forEach(tx => {
+      const category = tx.business_category || tx.primary_category || 'Uncategorized';
+      if (!categoryTotals[category]) {
+        categoryTotals[category] = {
+          count: 0,
+          total: 0,
+          transactions: []
+        };
+      }
+      categoryTotals[category].count++;
+      categoryTotals[category].total += Math.abs(tx.amount);
+      categoryTotals[category].transactions.push(tx);
+    });
+    
+    // Generate report
+    const report = {
+      user_id,
+      period: { start: start_date, end: end_date },
+      generated_at: new Date().toISOString(),
+      summary: {
+        total_business_expenses: transactions.reduce((sum, tx) => sum + Math.abs(tx.amount), 0),
+        total_transactions: transactions.length,
+        average_transaction: transactions.length > 0 
+          ? transactions.reduce((sum, tx) => sum + Math.abs(tx.amount), 0) / transactions.length 
+          : 0
+      },
+      by_category: categoryTotals,
+      monthly_breakdown: summaries
+    };
+    
+    res.json({ success: true, report });
+    
+  } catch (error) {
+    console.error('[Report] Error:', error);
+    res.status(500).json({ error: 'Failed to generate report' });
   }
 });
 
