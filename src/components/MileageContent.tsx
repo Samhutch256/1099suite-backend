@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, Alert, Modal, Switch } from 'react-native';
+import { View, Text, ScrollView, Pressable, TextInput, Alert, Modal, Switch, GestureResponderEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -22,9 +22,10 @@ interface TripCardProps {
   onCategorize: (tripId: string, tripType: TripType) => void;
   onDelete: (tripId: string) => void;
   onViewMap: (trip: MileageTrip) => void;
+  onEdit: (trip: MileageTrip) => void;
 }
 
-const TripCard: React.FC<TripCardProps> = ({ trip, onCategorize, onDelete, onViewMap }) => {
+const TripCard: React.FC<TripCardProps> = ({ trip, onCategorize, onDelete, onViewMap, onEdit }) => {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -66,6 +67,7 @@ const TripCard: React.FC<TripCardProps> = ({ trip, onCategorize, onDelete, onVie
   };
 
   return (
+    <Pressable onPress={() => onEdit(trip)} className="active:opacity-90">
     <Animated.View
       entering={FadeInDown}
       exiting={FadeOutUp}
@@ -110,7 +112,10 @@ const TripCard: React.FC<TripCardProps> = ({ trip, onCategorize, onDelete, onVie
       {/* Map Preview Button */}
       {trip.startLocation && trip.endLocation && (
         <Pressable
-          onPress={() => onViewMap(trip)}
+          onPress={(event: GestureResponderEvent) => {
+            event.stopPropagation();
+            onViewMap(trip);
+          }}
           className="bg-blue-500/10 border border-blue-500/40 rounded-xl p-3 mb-3"
         >
           <View className="flex-row items-center justify-between">
@@ -126,7 +131,8 @@ const TripCard: React.FC<TripCardProps> = ({ trip, onCategorize, onDelete, onVie
       {/* Action Buttons */}
       <View className="flex-row justify-between pt-3 border-t border-gray-800">
         <Pressable
-          onPress={() => {
+          onPress={(event: GestureResponderEvent) => {
+            event.stopPropagation();
             const types: TripType[] = ['business', 'medical', 'charity', 'personal'];
             const currentIndex = types.indexOf(trip.tripType);
             const nextType = types[(currentIndex + 1) % types.length];
@@ -139,7 +145,10 @@ const TripCard: React.FC<TripCardProps> = ({ trip, onCategorize, onDelete, onVie
         </Pressable>
         
         <Pressable
-          onPress={() => onDelete(trip.id)}
+          onPress={(event: GestureResponderEvent) => {
+            event.stopPropagation();
+            onDelete(trip.id);
+          }}
           className="flex-row items-center"
         >
           <Ionicons name="trash-outline" size={16} color="#ef4444" />
@@ -147,24 +156,36 @@ const TripCard: React.FC<TripCardProps> = ({ trip, onCategorize, onDelete, onVie
         </Pressable>
       </View>
     </Animated.View>
+    </Pressable>
   );
 };
 
 interface ManualTripModalProps {
   visible: boolean;
+  mode: 'create' | 'edit';
+  initialTrip?: MileageTrip | null;
   onClose: () => void;
-  onSave: (tripData: {
-    startLocation: { latitude: number; longitude: number; address?: string };
-    endLocation: { latitude: number; longitude: number; address?: string };
-    distance: number;
-    tripType: TripType;
-    purpose: string;
-    startTime: string;
-    endTime: string;
-  }) => void;
+  onSave: (
+    tripData: {
+      startLocation: { latitude: number; longitude: number; address?: string };
+      endLocation: { latitude: number; longitude: number; address?: string };
+      distance: number;
+      tripType: TripType;
+      purpose: string;
+      startTime: string;
+      endTime: string;
+    },
+    tripId?: string | null,
+  ) => void;
 }
 
-const ManualTripModal: React.FC<ManualTripModalProps> = ({ visible, onClose, onSave }) => {
+const ManualTripModal: React.FC<ManualTripModalProps> = ({
+  visible,
+  mode,
+  initialTrip,
+  onClose,
+  onSave,
+}) => {
   const [formData, setFormData] = useState({
     startAddress: '',
     endAddress: '',
@@ -174,6 +195,32 @@ const ManualTripModal: React.FC<ManualTripModalProps> = ({ visible, onClose, onS
     startTime: new Date(),
     endTime: new Date(),
   });
+
+  useEffect(() => {
+    if (visible) {
+      if (mode === 'edit' && initialTrip) {
+        setFormData({
+          startAddress: initialTrip.startLocation?.address ?? '',
+          endAddress: initialTrip.endLocation?.address ?? '',
+          distance: initialTrip.distance ? String(initialTrip.distance) : '',
+          tripType: initialTrip.tripType,
+          purpose: initialTrip.purpose ?? '',
+          startTime: initialTrip.startTime ? new Date(initialTrip.startTime) : new Date(),
+          endTime: initialTrip.endTime ? new Date(initialTrip.endTime) : new Date(),
+        });
+      } else {
+        setFormData({
+          startAddress: '',
+          endAddress: '',
+          distance: '',
+          tripType: 'business',
+          purpose: '',
+          startTime: new Date(),
+          endTime: new Date(),
+        });
+      }
+    }
+  }, [visible, mode, initialTrip]);
 
   const handleSave = () => {
     if (!formData.startAddress || !formData.endAddress || !formData.distance || !formData.purpose) {
@@ -198,19 +245,8 @@ const ManualTripModal: React.FC<ManualTripModalProps> = ({ visible, onClose, onS
       endTime: formData.endTime.toISOString(),
     };
 
-    onSave(tripData);
+    onSave(tripData, initialTrip?.id ?? null);
     onClose();
-    
-    // Reset form
-    setFormData({
-      startAddress: '',
-      endAddress: '',
-      distance: '',
-      tripType: 'business',
-      purpose: '',
-      startTime: new Date(),
-      endTime: new Date(),
-    });
   };
 
   return (
@@ -220,70 +256,72 @@ const ManualTripModal: React.FC<ManualTripModalProps> = ({ visible, onClose, onS
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <SafeAreaView className="flex-1 bg-gray-50">
-        <View className="flex-row items-center justify-between p-4 border-b border-gray-200 bg-white">
-          <Text className="text-xl font-bold text-gray-900">Add Manual Trip</Text>
+      <SafeAreaView className="flex-1 bg-[#0f172a]">
+        <View className="flex-row items-center justify-between p-4 border-b border-gray-800 bg-[#111827]">
+          <Text className="text-xl font-bold text-white">
+            {mode === 'edit' ? 'Edit Trip' : 'Add Manual Trip'}
+          </Text>
           <Pressable
             onPress={onClose}
-            className="w-8 h-8 rounded-full items-center justify-center bg-gray-100"
+            className="w-8 h-8 rounded-full items-center justify-center bg-gray-800"
           >
-            <Ionicons name="close" size={20} color="#6b7280" />
+            <Ionicons name="close" size={20} color="#d1d5db" />
           </Pressable>
         </View>
         
         <ScrollView className="flex-1 p-6">
           <View className="space-y-4">
             <View>
-              <Text className="text-sm font-medium text-gray-700 mb-2">Start Address</Text>
+              <Text className="text-sm font-medium text-gray-200 mb-2">Start Address</Text>
               <TextInput
                 value={formData.startAddress}
                 onChangeText={(text) => setFormData(prev => ({ ...prev, startAddress: text }))}
                 placeholder="Enter start address"
-                className="border border-gray-300 rounded-lg px-4 py-3 text-gray-900"
-                placeholderTextColor="#9ca3af"
+                className="border border-gray-700 bg-[#1f2937] rounded-xl px-4 py-3 text-gray-100"
+                placeholderTextColor="#6b7280"
               />
             </View>
 
             <View>
-              <Text className="text-sm font-medium text-gray-700 mb-2">End Address</Text>
+              <Text className="text-sm font-medium text-gray-200 mb-2">End Address</Text>
               <TextInput
                 value={formData.endAddress}
                 onChangeText={(text) => setFormData(prev => ({ ...prev, endAddress: text }))}
                 placeholder="Enter end address"
-                className="border border-gray-300 rounded-lg px-4 py-3 text-gray-900"
-                placeholderTextColor="#9ca3af"
+                className="border border-gray-700 bg-[#1f2937] rounded-xl px-4 py-3 text-gray-100"
+                placeholderTextColor="#6b7280"
               />
             </View>
 
             <View>
-              <Text className="text-sm font-medium text-gray-700 mb-2">Distance (miles)</Text>
+              <Text className="text-sm font-medium text-gray-200 mb-2">Distance (miles)</Text>
               <TextInput
                 value={formData.distance}
                 onChangeText={(text) => setFormData(prev => ({ ...prev, distance: text }))}
                 placeholder="Enter distance"
                 keyboardType="numeric"
-                className="border border-gray-300 rounded-lg px-4 py-3 text-gray-900"
-                placeholderTextColor="#9ca3af"
+                className="border border-gray-700 bg-[#1f2937] rounded-xl px-4 py-3 text-gray-100"
+                placeholderTextColor="#6b7280"
               />
             </View>
 
             <View>
-              <Text className="text-sm font-medium text-gray-700 mb-2">Trip Type</Text>
+              <Text className="text-sm font-medium text-gray-200 mb-2">Trip Type</Text>
               <View className="flex-row space-x-2">
                 {(['business', 'medical', 'charity', 'personal'] as TripType[]).map((type) => (
                   <Pressable
                     key={type}
                     onPress={() => setFormData(prev => ({ ...prev, tripType: type }))}
                     className={cn(
-                      "flex-1 py-3 px-4 rounded-lg border",
+                      "flex-1 py-3 px-4 rounded-xl border",
                       formData.tripType === type 
-                        ? "bg-blue-500 border-blue-500" 
-                        : "bg-white border-gray-300"
+                        ? "bg-purple-500 border-purple-400" 
+                        : "bg-[#1f2937] border-gray-700"
                     )}
                   >
                     <Text className={cn(
                       "text-center font-medium text-sm",
-                      formData.tripType === type ? "text-white" : "text-gray-700"
+                      formData.tripType === type ? "text-white" : "text-gray-300"
                     )}>
                       {type.charAt(0).toUpperCase() + type.slice(1)}
                     </Text>
@@ -293,18 +331,18 @@ const ManualTripModal: React.FC<ManualTripModalProps> = ({ visible, onClose, onS
             </View>
 
             <View>
-              <Text className="text-sm font-medium text-gray-700 mb-2">Purpose</Text>
+              <Text className="text-sm font-medium text-gray-200 mb-2">Purpose</Text>
               <TextInput
                 value={formData.purpose}
                 onChangeText={(text) => setFormData(prev => ({ ...prev, purpose: text }))}
                 placeholder="Enter trip purpose"
-                className="border border-gray-300 rounded-lg px-4 py-3 text-gray-900"
-                placeholderTextColor="#9ca3af"
+                className="border border-gray-700 bg-[#1f2937] rounded-xl px-4 py-3 text-gray-100"
+                placeholderTextColor="#6b7280"
               />
             </View>
 
             <View>
-              <Text className="text-sm font-medium text-gray-700 mb-2">Start Time</Text>
+              <Text className="text-sm font-medium text-gray-200 mb-2">Start Time</Text>
               <DateTimePicker
                 value={formData.startTime}
                 mode="datetime"
@@ -315,7 +353,7 @@ const ManualTripModal: React.FC<ManualTripModalProps> = ({ visible, onClose, onS
             </View>
 
             <View>
-              <Text className="text-sm font-medium text-gray-700 mb-2">End Time</Text>
+              <Text className="text-sm font-medium text-gray-200 mb-2">End Time</Text>
               <DateTimePicker
                 value={formData.endTime}
                 mode="datetime"
@@ -329,13 +367,13 @@ const ManualTripModal: React.FC<ManualTripModalProps> = ({ visible, onClose, onS
           <View className="flex-row space-x-3 mt-8">
             <Pressable
               onPress={onClose}
-              className="flex-1 bg-gray-300 px-6 py-4 rounded-lg"
+              className="flex-1 bg-gray-700 px-6 py-4 rounded-xl"
             >
-              <Text className="text-gray-700 font-semibold text-center">Cancel</Text>
+              <Text className="text-gray-200 font-semibold text-center">Cancel</Text>
             </Pressable>
             <Pressable
               onPress={handleSave}
-              className="flex-1 bg-blue-600 px-6 py-4 rounded-lg"
+              className="flex-1 bg-purple-600 px-6 py-4 rounded-xl"
             >
               <Text className="text-white font-semibold text-center">Save Trip</Text>
             </Pressable>
@@ -366,6 +404,7 @@ export const MileageContent: React.FC = () => {
     stopTrip,
     cancelTrip,
     addManualTrip,
+    updateTrip,
     categorizeTrip,
     deleteTrip,
     toggleAutoTracking,
@@ -379,6 +418,8 @@ export const MileageContent: React.FC = () => {
   const [showTripPurposeModal, setShowTripPurposeModal] = useState(false);
   const [showMapPreview, setShowMapPreview] = useState(false);
   const [selectedTripForMap, setSelectedTripForMap] = useState<MileageTrip | null>(null);
+  const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
+  const [editingTrip, setEditingTrip] = useState<MileageTrip | null>(null);
   const [tripPurpose, setTripPurpose] = useState('');
   const [selectedTripType, setSelectedTripType] = useState<TripType>('business');
   const [backgroundTrackingStatus, setBackgroundTrackingStatus] = useState<'checking' | 'available' | 'unavailable'>('checking');
@@ -492,14 +533,55 @@ export const MileageContent: React.FC = () => {
     );
   };
 
+  const handleEditTrip = (trip: MileageTrip) => {
+    setEditingTrip(trip);
+    setModalMode('edit');
+    setShowManualTripModal(true);
+  };
+
+  const handleManualTripButtonPress = () => {
+    setEditingTrip(null);
+    setModalMode('create');
+    setShowManualTripModal(true);
+  };
+
+  const handleManualModalClose = () => {
+    setShowManualTripModal(false);
+    setEditingTrip(null);
+    setModalMode('create');
+  };
+
+  const handleManualTripSave = (
+    tripData: {
+      startLocation: { latitude: number; longitude: number; address?: string };
+      endLocation: { latitude: number; longitude: number; address?: string };
+      distance: number;
+      tripType: TripType;
+      purpose: string;
+      startTime: string;
+      endTime: string;
+    },
+    tripId?: string | null,
+  ) => {
+    if (tripId) {
+      const updates = {
+        ...tripData,
+        irsRate: IRS_RATES[tripData.tripType],
+        value: tripData.distance * IRS_RATES[tripData.tripType],
+        status: 'completed' as MileageTrip['status'],
+        isAutoTracked: false,
+        route: [],
+      };
+      updateTrip(tripId, updates);
+    } else {
+      addManualTrip(tripData);
+    }
+    handleManualModalClose();
+  };
+
   const handleViewMap = (trip: MileageTrip) => {
     setSelectedTripForMap(trip);
     setShowMapPreview(true);
-  };
-
-  const handleSaveManualTrip = (tripData: any) => {
-    addManualTrip(tripData);
-    Alert.alert('Success', 'Manual trip has been added successfully!');
   };
 
   const handleAutoTrackingToggle = async (enabled: boolean) => {
@@ -625,7 +707,7 @@ export const MileageContent: React.FC = () => {
           </Pressable>
 
           <Pressable
-            onPress={() => setShowManualTripModal(true)}
+            onPress={handleManualTripButtonPress}
             className="flex-1 flex-row items-center justify-center py-3 bg-emerald-500 rounded-2xl"
           >
             <Ionicons name="add" size={18} color="white" />
@@ -702,7 +784,10 @@ export const MileageContent: React.FC = () => {
             <View className="flex-row items-center justify-between">
               <Text className="text-gray-400 text-xs">{latestTrip.purpose}</Text>
               <Pressable
-                onPress={() => handleViewMap(latestTrip)}
+                onPress={(event: GestureResponderEvent) => {
+                  event.stopPropagation();
+                  handleViewMap(latestTrip);
+                }}
                 className="px-3 py-1 bg-purple-600/30 border border-purple-500/40 rounded-full"
               >
                 <Text className="text-purple-200 text-xs font-medium">View</Text>
@@ -842,8 +927,10 @@ export const MileageContent: React.FC = () => {
       {/* Manual Trip Modal */}
       <ManualTripModal
         visible={showManualTripModal}
-        onClose={() => setShowManualTripModal(false)}
-        onSave={handleSaveManualTrip}
+        mode={modalMode}
+        initialTrip={editingTrip}
+        onClose={handleManualModalClose}
+        onSave={handleManualTripSave}
       />
 
       {/* Location Permission Guide */}
