@@ -372,10 +372,6 @@ export const MileageContent: React.FC = () => {
     toggleAutoTracking,
     startAutomaticTracking,
     stopAutomaticTracking,
-    getTotalMileage,
-    getTotalDeduction,
-    getMonthlyMileage,
-    getMonthlyDeduction,
     loadUserData,
   } = useMileageStore();
 
@@ -387,14 +383,6 @@ export const MileageContent: React.FC = () => {
   const [tripPurpose, setTripPurpose] = useState('');
   const [selectedTripType, setSelectedTripType] = useState<TripType>('business');
   const [backgroundTrackingStatus, setBackgroundTrackingStatus] = useState<'checking' | 'available' | 'unavailable'>('checking');
-
-  const totalMileage = useMemo(() => getTotalMileage(), [trips]);
-  const totalDeduction = useMemo(() => getTotalDeduction(), [trips]);
-
-  const currentMonth = new Date().getMonth();
-  const currentYear = new Date().getFullYear();
-  const monthlyMileage = useMemo(() => getMonthlyMileage(currentMonth, currentYear), [trips]);
-  const monthlyDeduction = useMemo(() => getMonthlyDeduction(currentMonth, currentYear), [trips]);
 
   // Animation for GPS tracking indicator
   const pulseAnimation = useSharedValue(1);
@@ -587,6 +575,8 @@ export const MileageContent: React.FC = () => {
   const sortedTrips = useMemo(() => {
     return [...trips].sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
   }, [trips]);
+
+  const latestTrip = sortedTrips.length > 0 ? sortedTrips[0] : null;
 
   return (
     <View style={{ flex: 1 }}>

@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Supabase configuration
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://bqkmykfooztuhvwwalcu.supabase.co';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'REMOVED_SENSITIVE_DATA';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'YOUR_NEW_SUPABASE_ANON_KEY_HERE';
 
 // Environment check
 console.log('🔧 Supabase URL present:', !!process.env.EXPO_PUBLIC_SUPABASE_URL);

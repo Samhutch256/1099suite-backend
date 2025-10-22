@@ -25,7 +25,7 @@
         "NPM_FLAGS": "--legacy-peer-deps",
         "USE_BUN": "0",
         "EXPO_PUBLIC_PLAID_CLIENT_ID": "68410cb75e233b0023d6213b",
-        "EXPO_PUBLIC_PLAID_SECRET": "94cf93eeb76f76143a39808bd3665b",
+        "EXPO_PUBLIC_PLAID_SECRET": "YOUR_NEW_PLAID_SECRET_HERE",
         "EXPO_PUBLIC_PLAID_ENV": "production",
         "EXPO_PUBLIC_PLAID_PUBLIC_KEY": "68410cb75e233b0023d6213b"
       },
