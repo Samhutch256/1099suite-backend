@@ -1,0 +1,69 @@
+{
+  "expo": {
+    "name": "1099Suite",
+    "slug": "vibecode",
+    "scheme": "suite1099",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "main": "index.ts",
+    "icon": "./assets/icon.png",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.hutch56.1099suite",
+      "buildNumber": "32",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "1099Suite uses location to automatically track your business mileage trips. This helps you accurately log travel for tax deductions and expense reporting.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "1099Suite uses background location to automatically detect and log your driving trips, even when the app is closed. This ensures you never miss a business mile for tax deductions. Your location data is only used for mileage tracking and is never shared with third parties.",
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSRemindersUsageDescription": "This app uses your reminders to add and view reminders.",
+        "NSContactsUsageDescription": "This app uses contacts to help you manage client relationships and business contacts.",
+        "NSCameraUsageDescription": "This app uses the camera to capture receipts and documents for expense tracking.",
+        "NSUserTrackingUsageDescription": "This app uses tracking to provide personalized follow-up reminders and improve your business workflow.",
+        "UIBackgroundModes": [
+          "location",
+          "remote-notification"
+        ],
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "suite1099"
+            ]
+          }
+        ]
+      }
+    },
+    "permissions": [
+      "LOCATION",
+      "NOTIFICATIONS",
+      "ACCESS_BACKGROUND_LOCATION"
+    ],
+    "android": {
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-notifications"
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "2f6616f6-79fa-4db3-96a3-cd20f33d7b1a"
+      }
+    },
+    "owner": "hutch56",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/2f6616f6-79fa-4db3-96a3-cd20f33d7b1a"
+    }
+  }
+}

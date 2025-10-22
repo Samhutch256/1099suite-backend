@@ -1,0 +1,33 @@
+{
+  "name": "1099suite-server",
+  "version": "1.0.0",
+  "description": "1099Suite Backend Server with Plaid Integration",
+  "main": "dist/index.js",
+  "engines": {
+    "node": ">=20.10.0"
+  },
+  "scripts": {
+    "start": "node dist/index.js",
+    "build": "tsc",
+    "dev": "tsx watch index.ts",
+    "prebuild": "rm -rf dist"
+  },
+  "keywords": ["plaid", "backend", "1099suite"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.52.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.0.1",
+    "express": "^5.1.0",
+    "plaid": "^36.0.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.8.3"
+  }
+}
+

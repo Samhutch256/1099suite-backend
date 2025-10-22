@@ -1,0 +1,54 @@
+import { writeFileSync } from 'fs';
+import { join } from 'path';
+
+// Generate a splash screen SVG for 1099Suite
+const splashSvg = `
+<svg width="1242" height="2436" viewBox="0 0 1242 2436" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1242" height="2436" fill="#1a1f2e"/>
+  
+  <!-- Background gradient -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2d3748;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4a5568;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1242" height="2436" fill="url(#bgGradient)"/>
+  
+  <!-- Main icon container -->
+  <rect x="321" y="800" width="600" height="600" rx="100" fill="#f97316"/>
+  
+  <!-- Briefcase icon -->
+  <rect x="421" y="900" width="400" height="300" rx="20" fill="white"/>
+  <rect x="521" y="850" width="200" height="50" rx="10" fill="white"/>
+  
+  <!-- Chart elements -->
+  <rect x="461" y="1050" width="40" height="120" fill="#f97316"/>
+  <rect x="521" y="1050" width="40" height="180" fill="#f97316"/>
+  <rect x="581" y="1050" width="40" height="220" fill="#f97316"/>
+  
+  <!-- Line graph -->
+  <path d="M 461 1170 L 521 1050 L 581 1030 L 641 1070" stroke="white" stroke-width="8" fill="none"/>
+  <circle cx="461" cy="1170" r="6" fill="white"/>
+  <circle cx="521" cy="1050" r="6" fill="white"/>
+  <circle cx="581" cy="1030" r="6" fill="white"/>
+  <circle cx="641" cy="1070" r="6" fill="white"/>
+  
+  <!-- App name -->
+  <text x="621" y="1550" font-family="Arial, sans-serif" font-size="80" font-weight="bold" text-anchor="middle" fill="white">1099</text>
+  <text x="621" y="1650" font-family="Arial, sans-serif" font-size="80" font-weight="bold" text-anchor="middle" fill="#f97316">Suite</text>
+  
+  <!-- Tagline -->
+  <text x="621" y="1750" font-family="Arial, sans-serif" font-size="40" text-anchor="middle" fill="#cbd5e1">What Gets Monitored Gets Managed</text>
+</svg>
+`;
+
+// Write the SVG file
+writeFileSync(join(__dirname, 'assets', 'splash.svg'), splashSvg);
+
+console.log('✅ Generated splash screen SVG in assets/splash.svg');
+console.log('📝 Note: You will need to convert this SVG to PNG format for Expo');
+console.log('💡 You can use online tools or design software to convert SVG to PNG');
+console.log('📱 Required size: 1242x2436 pixels (or use a square format like 1024x1024)'); 

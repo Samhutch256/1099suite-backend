@@ -1,0 +1,6 @@
+env: load .env
+env: export EXPO_PUBLIC_PLAID_CLIENT_ID EXPO_PUBLIC_PLAID_SECRET EXPO_PUBLIC_PLAID_PUBLIC_KEY EXPO_PUBLIC_PLAID_ENV
+Starting project at /home/user/workspace
+Starting Metro Bundler
+Waiting on http://localhost:8083
+Logs for your project will appear below.

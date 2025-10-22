@@ -1,0 +1,49 @@
+{
+  "cli": {
+    "version": ">= 16.17.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview"
+    },
+    "production": {
+      "autoIncrement": true,
+      "distribution": "store",
+      "channel": "production"
+    },
+    "testflight": {
+      "extends": "production",
+      "node": "18.19.0",
+      "env": {
+        "EXPO_USE_BUN": "0",
+        "NPM_FLAGS": "--legacy-peer-deps",
+        "USE_BUN": "0",
+        "EXPO_PUBLIC_PLAID_CLIENT_ID": "68410cb75e233b0023d6213b",
+        "EXPO_PUBLIC_PLAID_SECRET": "94cf93eeb76f76143a39808bd3665b",
+        "EXPO_PUBLIC_PLAID_ENV": "production",
+        "EXPO_PUBLIC_PLAID_PUBLIC_KEY": "68410cb75e233b0023d6213b"
+      },
+      "cache": {
+        "key": "testflight-{{ platform }}-{{ hash }}"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "6749026551"
+      }
+    },
+    "testflight": {
+      "ios": {
+        "ascAppId": "6749026551"
+      }
+    }
+  }
+}

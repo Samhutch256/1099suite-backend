@@ -1,0 +1,1593 @@
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, Pressable, TextInput, Alert, Linking, Modal } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { useContractorStore, Lead, FollowUpReminder } from '../state/contractorStore';
+import { useLeadFilterStore } from '../state/leadFilterStore';
+import { getVisibleStatusOptions, isLeadInHiddenStage, getStageLabel } from '../utils/stageVisibility';
+import { cn } from '../utils/cn';
+import { generateUniqueId } from '../utils/generateId';
+import { getOrderedStages } from '../types/pipeline';
+import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+
+type RootStackParamList = {
+  EditLead: { leadId: string };
+  LeadDetail: { leadId: string };
+  // Add other screens here as needed
+};
+
+type LeadDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'LeadDetail'>;
+
+// Communication functions
+const handleCall = (phone: string) => {
+  if (!phone || phone.trim() === '') {
+    Alert.alert('No Phone Number', 'This lead does not have a phone number.');
+    return;
+  }
+  const phoneNumber = phone.replace(/[^\d+]/g, '');
+  Linking.openURL(`tel:${phoneNumber}`);
+};
+
+const handleText = (phone: string) => {
+  if (!phone || phone.trim() === '') {
+    Alert.alert('No Phone Number', 'This lead does not have a phone number.');
+    return;
+  }
+  const phoneNumber = phone.replace(/[^\d+]/g, '');
+  Linking.openURL(`sms:${phoneNumber}`);
+};
+
+const handleEmail = (email: string) => {
+  if (!email || email.trim() === '') {
+    Alert.alert('No Email', 'This lead does not have an email address.');
+    return;
+  }
+  Linking.openURL(`mailto:${email}`);
+};
+
+const handleDirections = async (address: string) => {
+  if (!address || address.trim() === '') {
+    Alert.alert('No Address', 'This lead does not have an address.');
+    return;
+  }
+  
+  const encodedAddress = encodeURIComponent(address.trim());
+  
+  // Try Apple Maps first (iOS)
+  const appleMapsUrl = `maps://?q=${encodedAddress}`;
+  const canOpenAppleMaps = await Linking.canOpenURL(appleMapsUrl);
+  
+  if (canOpenAppleMaps) {
+    Linking.openURL(appleMapsUrl);
+  } else {
+    // Fallback to Google Maps web
+    const googleMapsUrl = `https://maps.google.com/?q=${encodedAddress}`;
+    Linking.openURL(googleMapsUrl);
+  }
+};
+
+const progressionStages: { key: Lead['status']; label: string; color: string; icon: keyof typeof Ionicons.glyphMap; description: string }[] = 
+  getOrderedStages()
+    .filter(stage => stage.isProgression)
+    .map(stage => ({
+      key: stage.key as Lead['status'],
+      label: stage.label,
+      color: stage.color,
+      icon: stage.icon as keyof typeof Ionicons.glyphMap,
+      description: stage.description
+    }));
+
+const lostReasons: { key: Lead['status']; label: string; color: string; icon: keyof typeof Ionicons.glyphMap; description: string }[] = [
+  { key: 'cancelled_appointment', label: 'Cancelled Appointment', color: 'bg-orange-500', icon: 'calendar-outline', description: 'Meeting was cancelled' },
+  { key: 'unqualified', label: 'Unqualified', color: 'bg-gray-500', icon: 'ban', description: 'Does not meet criteria' },
+  { key: 'cancelled_contract', label: 'Cancelled Contract', color: 'bg-red-500', icon: 'close-circle', description: 'Contract was cancelled' },
+];
+
+const lostReasonOptions = [
+  { key: 'not_interested', label: 'Not Interested' },
+  { key: 'unqualified', label: 'Unqualified' },
+  { key: 'budget', label: 'Budget Issues' },
+  { key: 'competitor', label: 'Chose Competitor' },
+  { key: 'other', label: 'Other' },
+];
+
+// Combine all status options for reference
+const statusOptions = [...progressionStages, ...lostReasons];
+
+const sourceOptions = [
+  'Website', 'Social Media', 'Referral', 'Cold Call', 'Door Knock', 'Google Ads', 
+  'Facebook Ads', 'LinkedIn', 'Trade Show', 'Partner', 'Other'
+];
+
+// DatePicker Component
+interface DatePickerFieldProps {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder: string;
+}
+
+const DatePickerField: React.FC<DatePickerFieldProps> = ({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+}) => {
+  const [showPicker, setShowPicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(
+    value ? new Date(value) : null
+  );
+
+  // Update selectedDate when value prop changes
+  useEffect(() => {
+    setSelectedDate(value ? new Date(value) : null);
+  }, [value]);
+
+  const handleDateChange = (event: any, date?: Date) => {
+    setShowPicker(false);
+    if (event.type === 'set' && date) {
+      setSelectedDate(date);
+      const dateString = date.toISOString().split('T')[0];
+      console.log('📅 [DatePickerField] Date selected for', label, ':', dateString);
+      onChangeText(dateString);
+    }
+  };
+
+  return (
+    <View className="flex-row items-center">
+      <View className="w-8 h-8 bg-gray-100 rounded-full items-center justify-center mr-3">
+        <Ionicons name="calendar-outline" size={16} color="#6b7280" />
+      </View>
+      <View className="flex-1">
+        <Text className="text-sm font-medium text-gray-500">{label}</Text>
+        <TextInput
+          value={value || ''}
+          placeholder={placeholder}
+          placeholderTextColor="#9ca3af"
+          editable={false}
+          onPressIn={() => setShowPicker(true)}
+          className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 mt-1 text-gray-900"
+          style={{ minHeight: 44 }}
+        />
+        {showPicker && (
+          <DateTimePicker
+            value={selectedDate || new Date()}
+            mode="date"
+            display="default"
+            onChange={handleDateChange}
+          />
+        )}
+      </View>
+    </View>
+  );
+};
+
+export const LeadDetailScreen: React.FC<LeadDetailScreenProps> = ({ navigation, route }) => {
+  const { leadId } = route.params;
+  const { leads, updateLead, deleteLead } = useContractorStore();
+  const { settings: filterSettings } = useLeadFilterStore();
+  
+  const [lead, setLead] = useState<Lead | null>(null);
+
+  const [isSaving, setIsSaving] = useState(false);
+  const [showSourceModal, setShowSourceModal] = useState(false);
+
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    company: '',
+    value: '',
+    guaranteedRevenue: '',
+    pipelineRevenue: '',
+    guaranteedPaidOut: false,
+    pipelinePaidOut: false,
+    totalRevenue: '',
+    paidOutRevenue: '',
+    notes: '',
+    source: '',
+    status: 'new' as Lead['status'],
+    lostReason: '',
+    appointmentDate: '',
+    appointmentTime: '',
+    appointmentNotes: '',
+    appointmentStatus: 'scheduled' as Lead['appointmentStatus'],
+    cancelledReason: '',
+    dateSet: '', // Added for Date Set
+    dateSetFor: '' // Added for Date Set For
+  });
+  const [attachments, setAttachments] = useState<{id: string, name: string, uri: string, type: string, size: number}[]>([]);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showSavedIndicator, setShowSavedIndicator] = useState(false);
+
+  // Function to update form data and track changes
+  const updateFormData = (updater: (prev: typeof formData) => typeof formData) => {
+    setFormData(prev => {
+      const newData = updater(prev);
+      setHasUnsavedChanges(true);
+      return newData;
+    });
+  };
+
+  // Auto-save functionality
+  useEffect(() => {
+    if (!hasUnsavedChanges || !lead || isSaving) return;
+    
+    const timeoutId = setTimeout(() => {
+      handleSave();
+    }, 2000); // Auto-save after 2 seconds of inactivity
+    
+    return () => clearTimeout(timeoutId);
+  }, [formData, hasUnsavedChanges, lead, isSaving]);
+
+  // Auto-calculate total revenue and paid out when guaranteed/pipeline changes
+  useEffect(() => {
+    const guaranteed = parseFloat(formData.guaranteedRevenue) || 0;
+    const pipeline = parseFloat(formData.pipelineRevenue) || 0;
+    const totalRevenue = guaranteed + pipeline;
+    const paidOut = (formData.guaranteedPaidOut ? guaranteed : 0) + 
+                   (formData.pipelinePaidOut ? pipeline : 0);
+    
+    if (totalRevenue.toString() !== formData.totalRevenue || paidOut.toString() !== formData.paidOutRevenue) {
+      setFormData(prev => ({ 
+        ...prev, 
+        totalRevenue: totalRevenue.toString(),
+        paidOutRevenue: paidOut.toString(),
+        value: totalRevenue.toString()
+      }));
+    }
+  }, [formData.guaranteedRevenue, formData.pipelineRevenue, formData.guaranteedPaidOut, formData.pipelinePaidOut]);
+
+  useEffect(() => {
+    const foundLead = leads.find(l => l.id === leadId);
+    if (foundLead) {
+      setLead(foundLead);
+      // Ensure revenue object exists (for backward compatibility)
+      const revenue = foundLead.revenue || {
+        guaranteedRevenue: 0,
+        pipelineRevenue: 0,
+        guaranteedPaidOut: false,
+        pipelinePaidOut: false,
+        totalRevenue: foundLead.value,
+        paidOutRevenue: 0
+      };
+      
+      const calculatedTotalRevenue = revenue.guaranteedRevenue + revenue.pipelineRevenue;
+      const calculatedPaidOutRevenue = (revenue.guaranteedPaidOut ? revenue.guaranteedRevenue : 0) + 
+                                      (revenue.pipelinePaidOut ? revenue.pipelineRevenue : 0);
+      
+      console.log('📅 [LeadDetail] Loading lead data:', {
+        leadId: foundLead.id,
+        name: foundLead.name,
+        dateSet: foundLead.dateSet,
+        dateSetFor: foundLead.dateSetFor,
+        appointmentSetOnDate: foundLead.appointmentSetOnDate,
+        appointmentDate: foundLead.appointmentDate
+      });
+      
+      setFormData({
+        name: foundLead.name,
+        email: foundLead.email,
+        phone: foundLead.phone,
+        company: foundLead.company,
+        value: calculatedTotalRevenue.toString(),
+        guaranteedRevenue: revenue.guaranteedRevenue.toString(),
+        pipelineRevenue: revenue.pipelineRevenue.toString(),
+        guaranteedPaidOut: revenue.guaranteedPaidOut || false,
+        pipelinePaidOut: revenue.pipelinePaidOut || false,
+        totalRevenue: calculatedTotalRevenue.toString(),
+        paidOutRevenue: calculatedPaidOutRevenue.toString(),
+        notes: foundLead.notes,
+        source: foundLead.source,
+        status: foundLead.status,
+        lostReason: foundLead.lostReason || '',
+        appointmentDate: foundLead.appointmentDate || '',
+        appointmentTime: foundLead.appointmentTime || '',
+        appointmentNotes: foundLead.appointmentNotes || '',
+        appointmentStatus: foundLead.appointmentStatus || 'scheduled',
+        cancelledReason: foundLead.cancelledReason || '',
+        dateSet: foundLead.dateSet || '', // Load dateSet from the correct field
+        dateSetFor: foundLead.dateSetFor || '' // Load dateSetFor from the correct field
+      });
+      
+      console.log('📅 [LeadDetail] Form data set:', {
+        dateSet: foundLead.dateSet || '',
+        dateSetFor: foundLead.dateSetFor || ''
+      });
+      
+      // Load attachments if they exist (mock for now)
+      setAttachments([]);
+      setHasUnsavedChanges(false);
+    }
+  }, [leadId, leads]);
+
+  const handleSave = async () => {
+    if (!lead) return;
+    
+    // Check if the selected status is visible
+    const visibleOptions = getVisibleStatusOptions(filterSettings);
+    const isStatusVisible = visibleOptions.allVisible.some(option => option.key === formData.status);
+    
+    if (!isStatusVisible) {
+      Alert.alert(
+        'Invalid Stage Selection',
+        'The selected stage is currently hidden in your Filter Settings. Please select a visible stage or enable this stage in your filter settings.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    
+    setIsSaving(true);
+    try {
+      // Track stage changes for feedback
+      const oldStatus = lead.status;
+      const newStatus = formData.status;
+      const stageChanged = oldStatus !== newStatus;
+      
+      // Track appointment status changes
+      const oldAppointmentStatus = lead.appointmentStatus;
+      const newAppointmentStatus = formData.appointmentStatus;
+      const appointmentStatusChanged = oldAppointmentStatus !== newAppointmentStatus;
+      
+      // Track source and commission changes
+      const oldSource = lead.source;
+      const newSource = formData.source as Lead['source'];
+      const sourceChanged = oldSource !== newSource;
+      
+      const oldValue = lead.value;
+      const newValue = parseFloat(formData.value) || 0;
+      const commissionChanged = oldValue !== newValue;
+      
+      const guaranteedRevenue = parseFloat(formData.guaranteedRevenue) || 0;
+      const pipelineRevenue = parseFloat(formData.pipelineRevenue) || 0;
+      const totalRevenue = guaranteedRevenue + pipelineRevenue;
+      const paidOutRevenue = (formData.guaranteedPaidOut ? guaranteedRevenue : 0) + 
+                            (formData.pipelinePaidOut ? pipelineRevenue : 0);
+
+      const updatedLead: Lead = {
+        ...lead,
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone.trim(),
+        company: formData.company.trim(),
+        value: totalRevenue,
+        revenue: {
+          guaranteedRevenue,
+          pipelineRevenue,
+          guaranteedPaidOut: formData.guaranteedPaidOut,
+          pipelinePaidOut: formData.pipelinePaidOut,
+          totalRevenue,
+          paidOutRevenue,
+        },
+        notes: formData.notes.trim(),
+        source: formData.source as Lead['source'],
+        status: formData.status,
+        lostReason: formData.lostReason as Lead['lostReason'] || undefined,
+        appointmentDate: formData.appointmentDate || undefined,
+        appointmentTime: formData.appointmentTime.trim() || undefined,
+        appointmentNotes: formData.appointmentNotes.trim() || undefined,
+        appointmentStatus: formData.appointmentStatus,
+        cancelledReason: formData.appointmentStatus === 'cancelled' ? (formData.cancelledReason as Lead['cancelledReason']) : undefined,
+        dateSet: formData.dateSet || undefined, // Save dateSet to the correct field
+        dateSetFor: formData.dateSetFor || undefined, // Save dateSetFor to the correct field
+        updatedAt: new Date().toISOString()
+      };
+
+      console.log('📅 [LeadDetail] Saving lead with dates:', {
+        dateSet: formData.dateSet || undefined,
+        dateSetFor: formData.dateSetFor || undefined,
+        updatedLeadDateSet: updatedLead.dateSet,
+        updatedLeadDateSetFor: updatedLead.dateSetFor
+      });
+      
+      await updateLead(leadId, updatedLead);
+      setLead(updatedLead);
+      setHasUnsavedChanges(false);
+      
+      // Show saved indicator
+      setShowSavedIndicator(true);
+      setTimeout(() => {
+        setShowSavedIndicator(false);
+      }, 2000); // Hide after 2 seconds
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update lead. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Lead',
+      `Are you sure you want to delete ${lead?.name}? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('[LeadDetail] Attempting to delete lead:', leadId);
+              console.log('[LeadDetail] Current user ID:', useContractorStore.getState().currentUserId);
+              console.log('[LeadDetail] Lead to delete:', lead);
+              await deleteLead(leadId);
+              console.log('[LeadDetail] Lead deleted successfully');
+              navigation.goBack();
+            } catch (error) {
+              console.error('[LeadDetail] Error deleting lead:', error);
+              const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+              Alert.alert('Error', `Failed to delete lead: ${errorMessage}`);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const getStatusConfig = (status: Lead['status']) => {
+    return statusOptions.find(option => option.key === status) || statusOptions[0];
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const handlePickDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        multiple: false,
+      });
+      
+      if (!result.canceled && result.assets[0]) {
+        const file = result.assets[0];
+        const newAttachment = {
+          id: generateUniqueId('attachment'),
+          name: file.name,
+          uri: file.uri,
+          type: file.mimeType || 'unknown',
+          size: file.size || 0,
+        };
+        setAttachments(prev => [...prev, newAttachment]);
+        Alert.alert('Success', 'File attached successfully!');
+      }
+    } catch (error) {
+      console.log('Document picker error:', error);
+      Alert.alert('Error', 'Failed to pick document. Please try again.');
+    }
+  };
+
+  const handleRemoveAttachment = (attachmentId: string) => {
+    Alert.alert(
+      'Remove Attachment',
+      'Are you sure you want to remove this attachment?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            setAttachments(prev => prev.filter(att => att.id !== attachmentId));
+          }
+        }
+      ]
+    );
+  };
+
+  const handleOpenAttachment = async (attachment: any) => {
+    try {
+      const canOpen = await Linking.canOpenURL(attachment.uri);
+      if (canOpen) {
+        await Linking.openURL(attachment.uri);
+      } else {
+        Alert.alert('Error', 'Cannot open this file type.');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to open file.');
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  if (!lead) {
+    return (
+      <SafeAreaView className="flex-1 bg-gray-50">
+        <View className="flex-1 items-center justify-center">
+          <Text className="text-gray-500 text-lg">Lead not found</Text>
+          <Pressable 
+            onPress={() => navigation.goBack()}
+            className="mt-4 bg-blue-500 px-6 py-3 rounded-xl"
+          >
+            <Text className="text-white font-semibold">Go Back</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const statusConfig = getStatusConfig(lead.status);
+
+  return (
+    <SafeAreaView className="flex-1 bg-gray-50">
+      {/* Header */}
+      <View className="px-4 py-3 bg-white border-b border-gray-100">
+        <View className="flex-row items-center justify-between">
+          <View className="flex-row items-center">
+            <Pressable
+              onPress={() => navigation.goBack()}
+              className="w-10 h-10 rounded-full items-center justify-center mr-3"
+            >
+              <Ionicons name="arrow-back" size={24} color="#374151" />
+            </Pressable>
+            <Text className="text-xl font-bold text-gray-900">Lead Details</Text>
+          </View>
+          
+          <View className="flex-row items-center space-x-2">
+            {/* Auto-save status indicator */}
+            {isSaving && (
+              <View className="flex-row items-center bg-blue-50 px-3 py-2 rounded-lg mr-2">
+                <View className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mr-2" />
+                <Text className="text-blue-600 font-medium text-xs">Saving...</Text>
+              </View>
+            )}
+            {showSavedIndicator && !isSaving && (
+              <View className="flex-row items-center bg-green-50 px-3 py-2 rounded-lg mr-2">
+                <Ionicons name="checkmark-circle" size={14} color="#059669" />
+                <Text className="text-green-600 font-medium text-xs ml-1">Saved</Text>
+              </View>
+            )}
+            {hasUnsavedChanges && !isSaving && !showSavedIndicator && (
+              <View className="flex-row items-center bg-amber-50 px-3 py-2 rounded-lg mr-2">
+                <View className="w-2 h-2 bg-amber-500 rounded-full mr-2" />
+                <Text className="text-amber-600 font-medium text-xs">Auto-saving...</Text>
+              </View>
+            )}
+            
+            <Pressable
+              onPress={handleDelete}
+              className="bg-red-500 px-4 py-2 rounded-lg flex-row items-center"
+            >
+              <Ionicons name="trash" size={16} color="white" />
+              <Text className="text-white font-medium text-sm ml-1">Delete</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+
+      <ScrollView className="flex-1 px-4 py-4">
+        {/* Contact Information - Moved to top */}
+        <View className="bg-white rounded-xl p-6 mb-4 shadow-sm border border-gray-100">
+          <View className="flex-row items-center justify-between mb-6">
+            <View className="flex-row items-center">
+              <View className="w-10 h-10 bg-blue-100 rounded-full items-center justify-center mr-3">
+                <Ionicons name="person" size={20} color="#2563eb" />
+              </View>
+              <Text className="text-lg font-semibold text-gray-900">Contact Information</Text>
+            </View>
+            <View>
+              <View className="ml-auto">
+                <Text className="text-xs text-blue-600 font-medium">Editable</Text>
+              </View>
+            </View>
+          </View>
+          
+          <View className="space-y-4">
+            <View className="flex-row items-center">
+              <View className="w-8 h-8 bg-gray-100 rounded-full items-center justify-center mr-3">
+                <Ionicons name="person-outline" size={16} color="#6b7280" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-sm font-medium text-gray-500">Name</Text>
+                <TextInput
+                  value={formData.name}
+                  onChangeText={(text) => updateFormData(prev => ({ ...prev, name: text }))}
+                  placeholder="Enter name"
+                  className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-gray-900 mt-1"
+                />
+              </View>
+            </View>
+
+            <View className="flex-row items-center">
+              <View className="w-8 h-8 bg-gray-100 rounded-full items-center justify-center mr-3">
+                <Ionicons name="business-outline" size={16} color="#6b7280" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-sm font-medium text-gray-500">Company</Text>
+                <TextInput
+                  value={formData.company}
+                  onChangeText={(text) => updateFormData(prev => ({ ...prev, company: text }))}
+                  placeholder="Enter company"
+                  className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-gray-900 mt-1"
+                />
+              </View>
+            </View>
+
+            <View className="flex-row items-center">
+              <View className="w-8 h-8 bg-gray-100 rounded-full items-center justify-center mr-3">
+                <Ionicons name="mail-outline" size={16} color="#6b7280" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-sm font-medium text-gray-500">Email</Text>
+                <TextInput
+                  value={formData.email}
+                  onChangeText={(text) => updateFormData(prev => ({ ...prev, email: text }))}
+                  placeholder="Enter email"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-gray-900 mt-1"
+                />
+              </View>
+            </View>
+
+            <View className="flex-row items-center">
+              <View className="w-8 h-8 bg-gray-100 rounded-full items-center justify-center mr-3">
+                <Ionicons name="call-outline" size={16} color="#6b7280" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-sm font-medium text-gray-500">Phone</Text>
+                <TextInput
+                  value={formData.phone}
+                  onChangeText={(text) => updateFormData(prev => ({ ...prev, phone: text }))}
+                  placeholder="Enter phone"
+                  keyboardType="phone-pad"
+                  className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-gray-900 mt-1"
+                />
+              </View>
+            </View>
+
+            {/* Date Set with DatePicker */}
+            <DatePickerField
+              label="Date Set"
+              value={formData.dateSet || ''}
+              onChangeText={(text) => updateFormData(prev => ({ ...prev, dateSet: text }))}
+              placeholder="Select date"
+            />
+
+            {/* Date Set For with DatePicker */}
+            <DatePickerField
+              label="Date Set For"
+              value={formData.dateSetFor || ''}
+              onChangeText={(text) => updateFormData(prev => ({ ...prev, dateSetFor: text }))}
+              placeholder="Select date"
+            />
+          </View>
+        </View>
+
+        {/* Status & Value Header */}
+        <View className="bg-white rounded-xl p-6 mb-4 shadow-sm border border-gray-100">
+          <View className="flex-row items-center justify-between mb-6">
+            <View className={cn("px-4 py-2 rounded-full flex-row items-center", statusConfig.color)}>
+              <Ionicons name={statusConfig.icon} size={18} color="white" />
+              <Text className="text-white font-semibold ml-2">{statusConfig.label}</Text>
+            </View>
+            <View>
+              <Text className="text-2xl font-bold text-gray-900">
+                Total: {formatCurrency((lead.revenue?.guaranteedRevenue || 0) + (lead.revenue?.pipelineRevenue || 0) || lead.value)}
+              </Text>
+              <Text className="text-sm text-gray-500 mt-1">
+                Paid Out: {formatCurrency(lead.revenue?.paidOutRevenue || 0)}
+              </Text>
+            </View>
+          </View>
+          
+          {/* Lead Source */}
+          <View className="mb-4">
+            <Text className="text-sm font-medium text-gray-500 mb-2">Lead Source</Text>
+            <Pressable onPress={() => setShowSourceModal(true)}>
+              <View className="flex-row items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <View className="flex-row items-center">
+                  <Text className="text-2xl mr-3">
+                    {lead.source === 'door_knocks' ? '🏠' :
+                     lead.source === 'tags_put' ? '🏷️' :
+                     lead.source === 'calls_made' ? '📞' :
+                     lead.source === 'referrals' ? '👥' :
+                     lead.source === 'inbound' ? '📥' : '❓'}
+                  </Text>
+                  <Text className="text-gray-900 font-medium">
+                    {lead.source === 'door_knocks' ? 'Door Knocks' :
+                     lead.source === 'tags_put' ? 'Tags Put' :
+                     lead.source === 'calls_made' ? 'Calls Made' :
+                     lead.source === 'referrals' ? 'Referrals' :
+                     lead.source === 'inbound' ? 'Inbound' : 'Other'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
+              </View>
+            </Pressable>
+          </View>
+          
+          <View className="border-t border-gray-100 pt-4">
+            <Text className="text-sm font-medium text-gray-500 mb-2">Last Updated</Text>
+            <Text className="text-gray-700 font-medium">
+              {(() => {
+                const updatedDate = new Date(lead.updatedAt);
+                if (!isNaN(updatedDate.getTime())) {
+                  return updatedDate.toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  });
+                } else {
+                  return 'No Date Inputted';
+                }
+              })()}
+            </Text>
+          </View>
+        </View>
+
+        {/* Revenue Tracking */}
+        <View className="bg-white rounded-xl p-6 mb-4 shadow-sm border border-gray-100">
+          <View className="flex-row items-center mb-4">
+            <View className="w-10 h-10 bg-green-100 rounded-full items-center justify-center mr-3">
+              <Ionicons name="analytics" size={20} color="#059669" />
+            </View>
+            <Text className="text-lg font-semibold text-gray-900">Revenue Tracking</Text>
+          </View>
+          
+          <View className="space-y-4">
+            {/* Guaranteed Revenue */}
+            <View className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+              <View className="flex-row items-center mb-3">
+                <View className="w-8 h-8 bg-green-100 rounded-full items-center justify-center mr-3">
+                  <Ionicons name="shield-checkmark-outline" size={16} color="#059669" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-sm font-medium text-gray-900">Guaranteed Revenue</Text>
+                  <Text className="text-xs text-gray-500">Revenue from signed contracts</Text>
+                </View>
+              </View>
+              <TextInput
+                value={formData.guaranteedRevenue}
+                onChangeText={(text) => {
+
+                  const numericValue = text.replace(/[^0-9.-]/g, '');
+                  const guaranteed = parseFloat(numericValue) || 0;
+                  const pipeline = parseFloat(formData.pipelineRevenue) || 0;
+                  const totalRevenue = guaranteed + pipeline;
+                  const paidOut = (formData.guaranteedPaidOut ? guaranteed : 0) + 
+                                 (formData.pipelinePaidOut ? pipeline : 0);
+                  
+                  updateFormData(prev => ({ 
+                    ...prev, 
+                    guaranteedRevenue: numericValue,
+                    totalRevenue: totalRevenue.toString(),
+                    paidOutRevenue: paidOut.toString(),
+                    value: totalRevenue.toString()
+                  }));
+                }}
+                placeholder="0.00"
+                keyboardType="decimal-pad"
+                className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-gray-900 mb-2"
+              />
+              <Pressable
+                onPress={() => {
+                  const guaranteed = parseFloat(formData.guaranteedRevenue) || 0;
+                  const pipeline = parseFloat(formData.pipelineRevenue) || 0;
+                  const newPaidOut = !formData.guaranteedPaidOut;
+                  const totalPaidOut = (newPaidOut ? guaranteed : 0) + 
+                                      (formData.pipelinePaidOut ? pipeline : 0);
+                  
+                  updateFormData(prev => ({ 
+                    ...prev, 
+                    guaranteedPaidOut: newPaidOut,
+                    paidOutRevenue: totalPaidOut.toString()
+                  }));
+                }}
+                className="flex-row items-center"
+
+              >
+                <View className={cn(
+                  "w-5 h-5 rounded border-2 items-center justify-center mr-2",
+                  formData.guaranteedPaidOut ? "bg-green-500 border-green-500" : "border-gray-300"
+                )}>
+                  {formData.guaranteedPaidOut && (
+                    <Ionicons name="checkmark" size={12} color="white" />
+                  )}
+                </View>
+                <Text className="text-sm text-gray-700">This amount has been paid out</Text>
+              </Pressable>
+            </View>
+
+            {/* Pipeline Revenue */}
+            <View className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+              <View className="flex-row items-center mb-3">
+                <View className="w-8 h-8 bg-blue-100 rounded-full items-center justify-center mr-3">
+                  <Ionicons name="trending-up-outline" size={16} color="#2563eb" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-sm font-medium text-gray-900">Pipeline Revenue</Text>
+                  <Text className="text-xs text-gray-500">Potential revenue from active leads</Text>
+                </View>
+              </View>
+              <TextInput
+                value={formData.pipelineRevenue}
+                onChangeText={(text) => {
+
+                  const numericValue = text.replace(/[^0-9.-]/g, '');
+                  const pipeline = parseFloat(numericValue) || 0;
+                  const guaranteed = parseFloat(formData.guaranteedRevenue) || 0;
+                  const totalRevenue = guaranteed + pipeline;
+                  const paidOut = (formData.guaranteedPaidOut ? guaranteed : 0) + 
+                                 (formData.pipelinePaidOut ? pipeline : 0);
+                  
+                  updateFormData(prev => ({ 
+                    ...prev, 
+                    pipelineRevenue: numericValue,
+                    totalRevenue: totalRevenue.toString(),
+                    paidOutRevenue: paidOut.toString(),
+                    value: totalRevenue.toString()
+                  }));
+                }}
+                placeholder="0.00"
+                keyboardType="decimal-pad"
+                className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-gray-900 mb-2"
+              />
+              <Pressable
+                onPress={() => {
+                  const guaranteed = parseFloat(formData.guaranteedRevenue) || 0;
+                  const pipeline = parseFloat(formData.pipelineRevenue) || 0;
+                  const newPaidOut = !formData.pipelinePaidOut;
+                  const totalPaidOut = (formData.guaranteedPaidOut ? guaranteed : 0) + 
+                                      (newPaidOut ? pipeline : 0);
+                  
+                  updateFormData(prev => ({ 
+                    ...prev, 
+                    pipelinePaidOut: newPaidOut,
+                    paidOutRevenue: totalPaidOut.toString()
+                  }));
+                }}
+                className="flex-row items-center"
+              >
+                <View className={cn(
+                  "w-5 h-5 rounded border-2 items-center justify-center mr-2",
+                  formData.pipelinePaidOut ? "bg-blue-500 border-blue-500" : "border-gray-300"
+                )}>
+                  {formData.pipelinePaidOut && (
+                    <Ionicons name="checkmark" size={12} color="white" />
+                  )}
+                </View>
+                <Text className="text-sm text-gray-700">This amount has been paid out</Text>
+              </Pressable>
+            </View>
+
+            {/* Quick Revenue Actions */}
+            <View className="pt-4 border-t border-gray-100">
+              <Text className="text-sm font-medium text-gray-500 mb-3">Quick Actions</Text>
+              <View className="flex-row flex-wrap gap-2">
+                <Pressable
+                  onPress={() => {
+                    const leadValue = lead?.value || 0;
+                    const isCancelled = ['cancelled_appointment', 'held_not_interested', 'unqualified', 'cancelled_contract'].includes(formData.status);
+                    
+                    // Calculate guaranteed revenue (preserve if already signed, even if cancelled)
+                    const guaranteed = ['signed_deal', 'installed'].includes(formData.status) ? leadValue : 0;
+                    
+                    // Pipeline revenue should be 0 for cancelled leads or closed deals
+                    const pipeline = !['signed_deal', 'installed'].includes(formData.status) && !isCancelled ? leadValue : 0;
+                    
+                    const totalRevenue = guaranteed + pipeline;
+                    const guaranteedPaidOut = formData.status === 'installed' && guaranteed > 0;
+                    const paidOut = (guaranteedPaidOut ? guaranteed : 0);
+                    
+                    updateFormData(prev => ({
+                      ...prev,
+                      guaranteedRevenue: guaranteed.toString(),
+                      pipelineRevenue: pipeline.toString(),
+                      guaranteedPaidOut,
+                      pipelinePaidOut: false,
+                      totalRevenue: totalRevenue.toString(),
+                      paidOutRevenue: paidOut.toString(),
+                      value: totalRevenue.toString()
+                    }));
+                  }}
+                  className="flex-row items-center px-3 py-2 bg-blue-50 rounded-lg border border-blue-200"
+                >
+                  <Ionicons name="refresh" size={14} color="#2563eb" />
+                  <Text className="text-blue-700 text-xs font-medium ml-1">Auto-Calculate</Text>
+                </Pressable>
+                
+                <Pressable
+                  onPress={() => {
+                    updateFormData(prev => ({
+                      ...prev,
+                      guaranteedRevenue: '0',
+                      pipelineRevenue: '0',
+                      guaranteedPaidOut: false,
+                      pipelinePaidOut: false,
+                      totalRevenue: '0',
+                      paidOutRevenue: '0',
+                      value: '0'
+                    }));
+                  }}
+                  className="flex-row items-center px-3 py-2 bg-gray-50 rounded-lg border border-gray-200"
+                >
+                  <Ionicons name="trash-outline" size={14} color="#6b7280" />
+                  <Text className="text-gray-700 text-xs font-medium ml-1">Clear All</Text>
+                </Pressable>
+              </View>
+            </View>
+
+            {/* Revenue Summary */}
+            <View className="pt-4 border-t border-gray-100 bg-gray-50 rounded-lg p-3">
+              <Text className="text-sm font-medium text-gray-700 mb-2">Revenue Summary</Text>
+              <View className="space-y-1">
+                <View className="flex-row justify-between">
+                  <Text className="text-xs text-gray-600">Total Revenue:</Text>
+                  <Text className="text-xs font-medium text-gray-900">
+                    {formatCurrency((parseFloat(formData.guaranteedRevenue) || 0) + (parseFloat(formData.pipelineRevenue) || 0))}
+                  </Text>
+                </View>
+                <View className="flex-row justify-between">
+                  <Text className="text-xs text-gray-600">Guaranteed:</Text>
+                  <Text className="text-xs font-medium text-green-700">
+                    {formatCurrency(parseFloat(formData.guaranteedRevenue) || 0)}
+                    {formData.guaranteedPaidOut && <Text className="ml-1">✓</Text>}
+                  </Text>
+                </View>
+                <View className="flex-row justify-between">
+                  <Text className="text-xs text-gray-600">Pipeline:</Text>
+                  <Text className="text-xs font-medium text-blue-700">
+                    {formatCurrency(parseFloat(formData.pipelineRevenue) || 0)}
+                    {formData.pipelinePaidOut && <Text className="ml-1">✓</Text>}
+                  </Text>
+                </View>
+                <View className="flex-row justify-between">
+                  <Text className="text-xs text-gray-600">Total Paid Out:</Text>
+                  <Text className="text-xs font-medium text-emerald-700">
+                    {formatCurrency(parseFloat(formData.paidOutRevenue) || 0)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Appointment Information */}
+        {lead.appointmentDate && (
+          <View className="bg-white rounded-xl p-6 mb-4 shadow-sm border border-gray-100">
+            <View className="flex-row items-center mb-4">
+              <View className={cn(
+                "w-10 h-10 rounded-full items-center justify-center mr-3",
+                lead.appointmentStatus === 'held' ? 'bg-green-100' :
+                lead.appointmentStatus === 'scheduled' ? 'bg-blue-100' :
+                lead.appointmentStatus === 'signed' ? 'bg-emerald-100' :
+                lead.appointmentStatus === 'cancelled' ? 'bg-red-100' : 'bg-orange-100'
+              )}>
+                <Ionicons 
+                  name={lead.appointmentStatus === 'held' ? 'checkmark-circle' :
+                        lead.appointmentStatus === 'scheduled' ? 'calendar' :
+                        lead.appointmentStatus === 'signed' ? 'document-text' :
+                        lead.appointmentStatus === 'cancelled' ? 'close-circle' : 'time'}
+                  size={20} 
+                  color={lead.appointmentStatus === 'held' ? '#059669' :
+                         lead.appointmentStatus === 'scheduled' ? '#2563eb' :
+                         lead.appointmentStatus === 'signed' ? '#10b981' :
+                         lead.appointmentStatus === 'cancelled' ? '#dc2626' : '#d97706'}
+                />
+              </View>
+              <View className="flex-1">
+                <Text className="text-lg font-semibold text-gray-900">
+                  Appointment {lead.appointmentStatus === 'held' ? 'Held' : 
+                              lead.appointmentStatus === 'scheduled' ? 'Scheduled' :
+                              lead.appointmentStatus === 'signed' ? 'Signed' :
+                              lead.appointmentStatus === 'cancelled' ? 'Cancelled' : 'Status'}
+                </Text>
+                <Text className={cn(
+                  "text-sm font-medium",
+                  lead.appointmentStatus === 'held' ? 'text-green-600' :
+                  lead.appointmentStatus === 'scheduled' ? 'text-blue-600' :
+                  lead.appointmentStatus === 'signed' ? 'text-emerald-600' :
+                  lead.appointmentStatus === 'cancelled' ? 'text-red-600' : 'text-orange-600'
+                )}>
+                  {lead.appointmentStatus === 'held' ? '✓ Completed' :
+                   lead.appointmentStatus === 'scheduled' ? '📅 Upcoming' :
+                   lead.appointmentStatus === 'signed' ? '📋 Contract Signed' :
+                   lead.appointmentStatus === 'cancelled' ? '❌ Cancelled' : 'Pending'}
+                </Text>
+              </View>
+            </View>
+
+            <View className="space-y-3">
+              <View className="flex-row items-center">
+                <View className="w-8 h-8 bg-gray-100 rounded-full items-center justify-center mr-3">
+                  <Ionicons name="calendar-outline" size={16} color="#6b7280" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-sm font-medium text-gray-500">Date Set For</Text>
+                  <View className="space-y-2 mt-1">
+                    <TextInput
+                      value={formData.appointmentDate}
+                      onChangeText={(text) => updateFormData(prev => ({ ...prev, appointmentDate: text }))}
+                      placeholder="YYYY-MM-DD"
+                      className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-gray-900"
+                    />
+                    <TextInput
+                      value={formData.appointmentTime}
+                      onChangeText={(text) => updateFormData(prev => ({ ...prev, appointmentTime: text }))}
+                      placeholder="10:00 AM"
+                      className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-gray-900"
+                    />
+                  </View>
+                </View>
+              </View>
+
+              <View className="flex-row items-center">
+                <View className="w-8 h-8 bg-gray-100 rounded-full items-center justify-center mr-3">
+                  <Ionicons name="flag-outline" size={16} color="#6b7280" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-sm font-medium text-gray-500">Appointment Status</Text>
+                  <View className="mt-1">
+                    <View className="flex-row flex-wrap gap-2">
+                      {['scheduled', 'held', 'signed', 'cancelled'].map((status) => (
+                        <Pressable
+                          key={status}
+                          onPress={() => updateFormData(prev => ({ ...prev, appointmentStatus: status as any }))}
+                          className={cn(
+                            "px-3 py-2 rounded-lg border",
+                            formData.appointmentStatus === status 
+                              ? "bg-blue-500 border-blue-500" 
+                              : "bg-gray-50 border-gray-200"
+                          )}
+                        >
+                          <Text className={cn(
+                            "text-sm font-medium",
+                            formData.appointmentStatus === status ? "text-white" : "text-gray-700"
+                          )}>
+                            {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+              </View>
+
+              {/* Cancellation Reason (only show if status is cancelled) */}
+              {formData.appointmentStatus === 'cancelled' && (
+                <View className="flex-row items-center">
+                  <View className="w-8 h-8 bg-gray-100 rounded-full items-center justify-center mr-3">
+                    <Ionicons name="help-circle-outline" size={16} color="#6b7280" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-sm font-medium text-gray-500">Cancellation Reason</Text>
+                    <View className="mt-1">
+                      <View className="flex-row flex-wrap gap-2">
+                        {[
+                          { key: 'cancelled_appointment', label: 'Cancelled Appointment' },
+                          { key: 'cancelled_contract', label: 'Cancelled Contract' }
+                        ].map((reason) => (
+                          <Pressable
+                            key={reason.key}
+                            onPress={() => updateFormData(prev => ({ ...prev, cancelledReason: reason.key as any }))}
+                            className={cn(
+                              "px-3 py-2 rounded-lg border",
+                              formData.cancelledReason === reason.key 
+                                ? "bg-red-500 border-red-500" 
+                                : "bg-gray-50 border-gray-200"
+                            )}
+                          >
+                            <Text className={cn(
+                              "text-sm font-medium",
+                              formData.cancelledReason === reason.key ? "text-white" : "text-gray-700"
+                            )}>
+                              {reason.label}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              <View className="flex-row items-center">
+                <View className="w-8 h-8 bg-gray-100 rounded-full items-center justify-center mr-3">
+                  <Ionicons name="time-outline" size={16} color="#6b7280" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-sm font-medium text-gray-500">Date Set On</Text>
+                  <Text className="text-gray-900 font-medium">
+                    {lead.appointmentSetOnDate ? 
+                      new Date(lead.appointmentSetOnDate).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      }) :
+                      new Date(lead.createdAt).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })
+                    }
+                  </Text>
+                </View>
+              </View>
+
+              <View>
+                <View className="flex-row items-start">
+                  <View className="w-8 h-8 bg-gray-100 rounded-full items-center justify-center mr-3 mt-0.5">
+                    <Ionicons name="document-text-outline" size={16} color="#6b7280" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-sm font-medium text-gray-500 mb-1">Appointment Notes</Text>
+                    <TextInput
+                      value={formData.appointmentNotes}
+                      onChangeText={(text) => updateFormData(prev => ({ ...prev, appointmentNotes: text }))}
+                      placeholder="Add notes about this appointment..."
+                      multiline
+                      numberOfLines={3}
+                      textAlignVertical="top"
+                      className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-gray-900"
+                    />
+                  </View>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Pipeline Stage Tracker */}
+        <View className="bg-white rounded-xl p-6 mb-4 shadow-sm border border-gray-100">
+          <View className="flex-row items-center mb-4">
+            <View className="w-10 h-10 bg-purple-100 rounded-full items-center justify-center mr-3">
+              <Ionicons name="analytics" size={20} color="#7c3aed" />
+            </View>
+            <Text className="text-lg font-semibold text-gray-900">Pipeline Stage</Text>
+          </View>
+
+          {/* Current Stage Display */}
+          <View className="mb-6">
+            <Text className="text-sm font-medium text-gray-500 mb-3">Current Stage</Text>
+            {(() => {
+              const currentStage = progressionStages.find(s => s.key === (lead?.status || 'new'));
+              if (!currentStage) return null;
+              
+              return (
+                <View className="flex-row items-center p-4 bg-green-50 border border-green-200 rounded-xl">
+                  <View className={cn(
+                    "w-12 h-12 rounded-full items-center justify-center mr-4",
+                    currentStage.color
+                  )}>
+                    <Ionicons 
+                      name={currentStage.icon} 
+                      size={20} 
+                      color="white"
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-lg font-semibold text-green-900">
+                      {currentStage.label}
+                    </Text>
+                    <Text className="text-sm text-green-700">
+                      {currentStage.description}
+                    </Text>
+                  </View>
+                  <View className="w-6 h-6 bg-green-500 rounded-full items-center justify-center">
+                    <Ionicons name="checkmark" size={12} color="white" />
+                  </View>
+                </View>
+              );
+            })()}
+          </View>
+
+          {/* Stage Selection */}
+          <View className="space-y-4">
+            <Text className="text-sm font-medium text-gray-700">Update Stage:</Text>
+            <View className="space-y-6">
+              {/* Check if current lead is in hidden stage */}
+              {lead && isLeadInHiddenStage(lead, filterSettings) && (
+                <View className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <View className="flex-row items-center mb-2">
+                    <Ionicons name="warning" size={20} color="#dc2626" />
+                    <Text className="text-red-800 font-medium ml-2">Lead in Hidden Stage</Text>
+                  </View>
+                  <Text className="text-red-700 text-sm mb-2">
+                    This lead is currently in "{getStageLabel(lead.status)}" which is hidden in your Filter Settings.
+                  </Text>
+                  <Text className="text-red-600 text-xs">
+                    Please select a visible stage from the options below to update this lead.
+                  </Text>
+                </View>
+              )}
+                
+                {(() => {
+                  const visibleOptions = getVisibleStatusOptions(filterSettings);
+                  
+                  return (
+                    <>
+                      {/* Active Stages Section */}
+                      {visibleOptions.progressionStages.length > 0 && (
+                        <View className="mb-6">
+                          <View className="flex-row items-center mb-4">
+                            <View className="w-6 h-6 bg-green-100 rounded-full items-center justify-center mr-2">
+                              <Ionicons name="checkmark-circle" size={12} color="#10b981" />
+                            </View>
+                            <Text className="text-base font-semibold text-gray-900">Active</Text>
+                          </View>
+                          <View className="space-y-3">
+                            {visibleOptions.progressionStages.map((option) => {
+                              const isSelected = formData.status === option.key;
+                              
+                              return (
+                                <Pressable
+                                  key={option.key}
+                                  onPress={() => updateFormData(prev => ({ ...prev, status: option.key as Lead['status'] }))}
+                                  className={cn(
+                                    "flex-row items-center p-5 rounded-xl border-2 transition-all",
+                                    isSelected 
+                                      ? "bg-green-50 border-green-200" 
+                                      : "bg-gray-50 border-gray-200"
+                                  )}
+                                >
+                                  <View className={cn(
+                                    "w-10 h-10 rounded-full items-center justify-center mr-4",
+                                    isSelected ? option.color : "bg-gray-300"
+                                  )}>
+                                    <Ionicons 
+                                      name={option.icon} 
+                                      size={18} 
+                                      color={isSelected ? "white" : "#6b7280"} 
+                                    />
+                                  </View>
+                                  <View className="flex-1">
+                                    <Text className={cn(
+                                      "font-semibold text-base",
+                                      isSelected ? "text-green-700" : "text-gray-700"
+                                    )}>
+                                      {option.label}
+                                    </Text>
+                                    <Text className={cn(
+                                      "text-sm",
+                                      isSelected ? "text-green-600" : "text-gray-500"
+                                    )}>
+                                      {option.description}
+                                    </Text>
+                                  </View>
+                                  {isSelected && (
+                                    <View className="w-6 h-6 bg-green-500 rounded-full items-center justify-center">
+                                      <Ionicons name="checkmark" size={14} color="white" />
+                                    </View>
+                                  )}
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        </View>
+                      )}
+
+                      {/* Divider */}
+                      {visibleOptions.progressionStages.length > 0 && visibleOptions.lostReasons.length > 0 && (
+                        <View className="border-t border-gray-200 mb-6" />
+                      )}
+
+                      {/* Inactive Stages Section */}
+                      {visibleOptions.lostReasons.length > 0 && (
+                        <View>
+                          <View className="flex-row items-center mb-4">
+                            <View className="w-6 h-6 bg-gray-100 rounded-full items-center justify-center mr-2">
+                              <Ionicons name="close-circle" size={12} color="#6b7280" />
+                            </View>
+                            <Text className="text-base font-semibold text-gray-700">Inactive</Text>
+                          </View>
+                          <View className="space-y-3">
+                            {visibleOptions.lostReasons.map((option) => {
+                              const isSelected = formData.status === option.key;
+                              
+                              return (
+                                <Pressable
+                                  key={option.key}
+                                  onPress={() => updateFormData(prev => ({ ...prev, status: option.key as Lead['status'] }))}
+                                  className={cn(
+                                    "flex-row items-center p-5 rounded-xl border-2 transition-all",
+                                    isSelected 
+                                      ? "bg-gray-50 border-gray-200" 
+                                      : "bg-gray-50 border-gray-200"
+                                  )}
+                                >
+                                  <View className={cn(
+                                    "w-10 h-10 rounded-full items-center justify-center mr-4",
+                                    isSelected ? option.color : "bg-gray-300"
+                                  )}>
+                                    <Ionicons 
+                                      name={option.icon} 
+                                      size={18} 
+                                      color={isSelected ? "white" : "#6b7280"} 
+                                    />
+                                  </View>
+                                  <View className="flex-1">
+                                    <Text className={cn(
+                                      "font-semibold text-base",
+                                      isSelected ? "text-gray-700" : "text-gray-700"
+                                    )}>
+                                      {option.label}
+                                    </Text>
+                                    <Text className={cn(
+                                      "text-sm",
+                                      isSelected ? "text-gray-600" : "text-gray-500"
+                                    )}>
+                                      {option.description}
+                                    </Text>
+                                  </View>
+                                  {isSelected && (
+                                    <View className="w-6 h-6 bg-gray-500 rounded-full items-center justify-center">
+                                      <Ionicons name="checkmark" size={14} color="white" />
+                                    </View>
+                                  )}
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        </View>
+                      )}
+                      
+                      {/* No visible stages message */}
+                      {visibleOptions.allVisible.length === 0 && (
+                        <View className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                          <View className="flex-row items-center mb-2">
+                            <Ionicons name="warning" size={20} color="#d97706" />
+                            <Text className="text-amber-800 font-medium ml-2">No Stages Available</Text>
+                          </View>
+                          <Text className="text-amber-700 text-sm">
+                            All pipeline stages are currently hidden in your Filter Settings. Please enable at least one stage to update this lead's status.
+                          </Text>
+                        </View>
+                      )}
+                    </>
+                  );
+                })()}
+            </View>
+          </View>
+        </View>
+
+        {/* Quick Actions */}
+        {(lead.phone || lead.email || lead.company) && (
+          <View className="bg-white rounded-xl p-4 mb-4 shadow-sm border border-gray-100">
+            <Text className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</Text>
+            <View className="flex-row flex-wrap gap-3">
+              {lead.phone && (
+                <>
+                  <Pressable
+                    onPress={() => handleCall(lead.phone)}
+                    className="flex-row items-center px-4 py-3 bg-green-50 rounded-xl border border-green-200 flex-1 min-w-0"
+                    style={{ minWidth: '45%' }}
+                  >
+                    <View className="w-8 h-8 bg-green-100 rounded-full items-center justify-center mr-3">
+                      <Ionicons name="call" size={16} color="#059669" />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-green-700 font-semibold text-sm">Call</Text>
+                      <Text className="text-green-600 text-xs" numberOfLines={1}>{lead.phone}</Text>
+                    </View>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleText(lead.phone)}
+                    className="flex-row items-center px-4 py-3 bg-blue-50 rounded-xl border border-blue-200 flex-1 min-w-0"
+                    style={{ minWidth: '45%' }}
+                  >
+                    <View className="w-8 h-8 bg-blue-100 rounded-full items-center justify-center mr-3">
+                      <Ionicons name="chatbubble" size={16} color="#2563eb" />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-blue-700 font-semibold text-sm">Text</Text>
+                      <Text className="text-blue-600 text-xs" numberOfLines={1}>{lead.phone}</Text>
+                    </View>
+                  </Pressable>
+                </>
+              )}
+              {lead.email && (
+                <Pressable
+                  onPress={() => handleEmail(lead.email)}
+                  className="flex-row items-center px-4 py-3 bg-purple-50 rounded-xl border border-purple-200 flex-1 min-w-0"
+                  style={{ minWidth: lead.phone ? '45%' : '100%' }}
+                >
+                  <View className="w-8 h-8 bg-purple-100 rounded-full items-center justify-center mr-3">
+                    <Ionicons name="mail" size={16} color="#7c3aed" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-purple-700 font-semibold text-sm">Email</Text>
+                    <Text className="text-purple-600 text-xs" numberOfLines={1}>{lead.email}</Text>
+                  </View>
+                </Pressable>
+              )}
+              {(lead.address || lead.company) && (
+                <Pressable
+                  onPress={async () => {
+                    const addressToUse = lead.address || lead.company;
+                    // If company field contains address info, extract it from notes
+                    if (!lead.address && lead.notes.includes('Address:')) {
+                      const addressMatch = lead.notes.match(/Address: ([^\n]+)/);
+                      const extractedAddress = addressMatch ? addressMatch[1] : lead.company;
+                      await handleDirections(extractedAddress !== 'Not provided' ? extractedAddress : lead.company);
+                    } else {
+                      await handleDirections(addressToUse);
+                    }
+                  }}
+                  className="flex-row items-center px-4 py-3 bg-orange-50 rounded-xl border border-orange-200 flex-1 min-w-0"
+                  style={{ minWidth: lead.phone || lead.email ? '45%' : '100%' }}
+                >
+                  <View className="w-8 h-8 bg-orange-100 rounded-full items-center justify-center mr-3">
+                    <Ionicons name="navigate" size={16} color="#ea580c" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-orange-700 font-semibold text-sm">Directions</Text>
+                    <Text className="text-orange-600 text-xs" numberOfLines={1}>
+                      {lead.address || (lead.notes.includes('Address:') ? 
+                        lead.notes.match(/Address: ([^\n]+)/)?.[1] || lead.company : 
+                        lead.company
+                      )}
+                    </Text>
+                  </View>
+                </Pressable>
+              )}
+            </View>
+          </View>
+        )}
+
+
+
+        {/* Notes */}
+        <View className="bg-white rounded-xl p-6 mb-4 shadow-sm border border-gray-100">
+          <View className="flex-row items-center mb-4">
+            <View className="w-10 h-10 bg-gray-100 rounded-full items-center justify-center mr-3">
+              <Ionicons name="document-text" size={20} color="#6b7280" />
+            </View>
+            <Text className="text-lg font-semibold text-gray-900">Notes</Text>
+          </View>
+          
+          <TextInput
+            value={formData.notes}
+            onChangeText={(text) => updateFormData(prev => ({ ...prev, notes: text }))}
+            placeholder="Add notes, observations, or important details about this lead..."
+            multiline
+            numberOfLines={6}
+            className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-gray-900"
+            style={{ minHeight: 120 }}
+            textAlignVertical="top"
+          />
+          <View className="mt-2">
+            <Text className="text-xs text-gray-500">
+              💡 Add important details, next steps, conversation notes, or any observations about this lead
+            </Text>
+          </View>
+        </View>
+
+        {/* File Attachments */}
+        <View className="bg-white rounded-xl p-4 mb-4 shadow-sm border border-gray-100">
+          <View className="flex-row items-center justify-between mb-4">
+            <Text className="text-lg font-semibold text-gray-900">Attachments</Text>
+            <Pressable
+              onPress={handlePickDocument}
+              className="bg-blue-500 px-3 py-2 rounded-lg flex-row items-center"
+            >
+              <Ionicons name="attach" size={16} color="white" />
+              <Text className="text-white font-medium text-sm ml-1">Add File</Text>
+            </Pressable>
+          </View>
+          
+          {attachments.length > 0 ? (
+            <View>
+              {attachments.map((attachment) => (
+                <View key={attachment.id} className="flex-row items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 mb-2">
+                  <Pressable
+                    onPress={() => handleOpenAttachment(attachment)}
+                    className="flex-1 flex-row items-center"
+                  >
+                    <View className="w-8 h-8 bg-blue-100 rounded-lg items-center justify-center mr-3">
+                      <Ionicons 
+                        name={attachment.type.includes('image') ? 'image' : 
+                              attachment.type.includes('pdf') ? 'document' : 
+                              'document-text'} 
+                        size={16} 
+                        color="#3b82f6" 
+                      />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-gray-900 font-medium text-sm" numberOfLines={1}>
+                        {attachment.name}
+                      </Text>
+                      <Text className="text-gray-500 text-xs">
+                        {formatFileSize(attachment.size)}
+                      </Text>
+                    </View>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleRemoveAttachment(attachment.id)}
+                    className="w-8 h-8 items-center justify-center"
+                  >
+                    <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View className="items-center py-8">
+              <View className="w-12 h-12 bg-gray-100 rounded-full items-center justify-center mb-3">
+                <Ionicons name="attach" size={20} color="#9ca3af" />
+              </View>
+              <Text className="text-gray-500 text-sm text-center">
+                No attachments yet.{"\n"}Tap "Add File" to attach documents.
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <View className="h-20" />
+      </ScrollView>
+
+
+
+      {/* Source Edit Modal */}
+      <Modal
+        visible={showSourceModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowSourceModal(false)}
+      >
+        <SafeAreaView className="flex-1 bg-gray-50">
+          <View className="flex-row items-center justify-between p-4 border-b border-gray-200 bg-white">
+            <Text className="text-lg font-semibold">Edit Lead Source</Text>
+            <Pressable onPress={() => setShowSourceModal(false)}>
+              <Ionicons name="close" size={24} color="#9ca3af" />
+            </Pressable>
+          </View>
+          <View className="p-6">
+            <Text className="text-sm text-gray-600 mb-4">Select how this lead was generated</Text>
+            <View className="space-y-2">
+              {[
+                { key: 'door_knocks', label: 'Door Knocks', emoji: '🏠' },
+                { key: 'tags_put', label: 'Tags Put', emoji: '🏷️' },
+                { key: 'calls_made', label: 'Calls Made', emoji: '📞' },
+                { key: 'referrals', label: 'Referrals', emoji: '👥' },
+                { key: 'inbound', label: 'Inbound', emoji: '📥' },
+                { key: 'other', label: 'Other', emoji: '❓' },
+              ].map((source) => (
+                <Pressable
+                  key={source.key}
+                  onPress={() => {
+                    updateFormData(prev => ({ ...prev, source: source.key as Lead['source'] }));
+                    setShowSourceModal(false);
+                  }}
+                  className={
+                    formData.source === source.key 
+                      ? "flex-row items-center p-4 rounded-lg bg-blue-500 border-2 border-blue-500" 
+                      : "flex-row items-center p-4 rounded-lg bg-white border-2 border-gray-200"
+                  }
+                >
+                  <Text className="text-xl mr-3">{source.emoji}</Text>
+                  <Text className={
+                    formData.source === source.key ? "font-medium text-white flex-1" : "font-medium text-gray-900 flex-1"
+                  }>
+                    {source.label}
+                  </Text>
+                  {formData.source === source.key && (
+                    <Ionicons name="checkmark-circle" size={20} color="white" />
+                  )}
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
+    </SafeAreaView>
+  );
+};

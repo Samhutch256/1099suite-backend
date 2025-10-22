@@ -1,0 +1,22 @@
+create table if not exists public.expenses (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  plaid_transaction_id text unique,
+  account_id text,
+  date date not null,
+  name text,
+  merchant_name text,
+  amount numeric(12,2) not null,
+  currency text default 'USD',
+  category text[],
+  account_name text,
+  pending boolean default false,
+  classification text check (classification in ('business','personal','unreviewed')) default 'unreviewed',
+  client_id uuid null,
+  notes text,
+  logo_url text,
+  recurring boolean default false,
+  original_description text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);

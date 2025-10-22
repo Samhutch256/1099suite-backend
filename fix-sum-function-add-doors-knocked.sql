@@ -1,0 +1,73 @@
+-- Fix: Add doors_knocked to the SUM function
+-- This is the missing piece - the function returns period totals but was missing doors_knocked!
+
+CREATE OR REPLACE FUNCTION public.daily_inputs_sum_range_with_subinputs(p_user uuid, p_start date, p_end date)
+RETURNS TABLE (
+  doors_knocked int,
+  appointments_set int,
+  appointments_held int,
+  closed_deals int,
+  accounts_serviced int,
+  hours_worked numeric,
+  outreach_door_knocks int,
+  outreach_tags_put int,
+  outreach_calls_made int,
+  outreach_referrals int,
+  outreach_inbound int,
+  appointments_set_door_knocks int,
+  appointments_set_tags_put int,
+  appointments_set_calls_made int,
+  appointments_set_referrals int,
+  appointments_set_inbound int,
+  appointments_held_door_knocks int,
+  appointments_held_tags_put int,
+  appointments_held_calls_made int,
+  appointments_held_referrals int,
+  appointments_held_inbound int,
+  deals_closed_door_knocks int,
+  deals_closed_tags_put int,
+  deals_closed_calls_made int,
+  deals_closed_referrals int,
+  deals_closed_inbound int,
+  accounts_serviced_door_knocks int,
+  accounts_serviced_tags_put int,
+  accounts_serviced_calls_made int,
+  accounts_serviced_referrals int,
+  accounts_serviced_inbound int
+) LANGUAGE sql STABLE AS $$
+  SELECT
+    COALESCE(SUM(doors_knocked),0)::int,
+    COALESCE(SUM(appointments),0)::int,
+    COALESCE(SUM(appointment_holds),0)::int,
+    COALESCE(SUM(closed_deals),0)::int,
+    COALESCE(SUM(accounts_serviced),0)::int,
+    COALESCE(SUM(hours_worked),0),
+    COALESCE(SUM(outreach_door_knocks),0)::int,
+    COALESCE(SUM(outreach_tags_put),0)::int,
+    COALESCE(SUM(outreach_calls_made),0)::int,
+    COALESCE(SUM(outreach_referrals),0)::int,
+    COALESCE(SUM(outreach_inbound),0)::int,
+    COALESCE(SUM(appointments_set_door_knocks),0)::int,
+    COALESCE(SUM(appointments_set_tags_put),0)::int,
+    COALESCE(SUM(appointments_set_calls_made),0)::int,
+    COALESCE(SUM(appointments_set_referrals),0)::int,
+    COALESCE(SUM(appointments_set_inbound),0)::int,
+    COALESCE(SUM(appointments_held_door_knocks),0)::int,
+    COALESCE(SUM(appointments_held_tags_put),0)::int,
+    COALESCE(SUM(appointments_held_calls_made),0)::int,
+    COALESCE(SUM(appointments_held_referrals),0)::int,
+    COALESCE(SUM(appointments_held_inbound),0)::int,
+    COALESCE(SUM(deals_closed_door_knocks),0)::int,
+    COALESCE(SUM(deals_closed_tags_put),0)::int,
+    COALESCE(SUM(deals_closed_calls_made),0)::int,
+    COALESCE(SUM(deals_closed_referrals),0)::int,
+    COALESCE(SUM(deals_closed_inbound),0)::int,
+    COALESCE(SUM(accounts_serviced_door_knocks),0)::int,
+    COALESCE(SUM(accounts_serviced_tags_put),0)::int,
+    COALESCE(SUM(accounts_serviced_calls_made),0)::int,
+    COALESCE(SUM(accounts_serviced_referrals),0)::int,
+    COALESCE(SUM(accounts_serviced_inbound),0)::int
+  FROM public.daily_inputs
+  WHERE user_id = p_user AND date::date BETWEEN p_start AND p_end;
+$$;
+
