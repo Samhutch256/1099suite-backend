@@ -5,7 +5,7 @@ const { createClient } = require('@supabase/supabase-js');
 
 // Supabase credentials from your config
 const SUPABASE_URL = 'https://bqkmykfooztuhvwwalcu.supabase.co';
-const SUPABASE_ANON_KEY = 'REMOVED_SENSITIVE_DATA';
+const SUPABASE_ANON_KEY = 'process.env.SUPABASE_ANON_KEY || "YOUR_SUPABASE_ANON_KEY_HERE"';
 
 // The current user ID (from the logs)
 const CURRENT_USER_ID = '41a61d89-41a6-41a6-81a6-41a61d8941a6';

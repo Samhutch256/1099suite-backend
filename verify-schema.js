@@ -4,7 +4,7 @@
 const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = 'https://bqkmykfooztuhvwwalcu.supabase.co';
-const supabaseKey = 'REMOVED_SENSITIVE_DATA';
+const supabaseKey = 'process.env.SUPABASE_ANON_KEY || "YOUR_SUPABASE_ANON_KEY_HERE"';
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 

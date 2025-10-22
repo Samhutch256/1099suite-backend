@@ -18,7 +18,7 @@ Let's test if the basic connection works:
 ```bash
 # Run this in your terminal to test the connection
 curl -X GET "https://bqkmykfooztuhvwwalcu.supabase.co/rest/v1/" \
-  -H "apikey: REMOVED_SENSITIVE_DATA"
+  -H "apikey: YOUR_SUPABASE_ANON_KEY_HERE"
 ```
 
 ### 3. **Check Database Tables**
@@ -82,7 +82,7 @@ Look for specific error messages in the app console:
 Check your `src/config/supabase.ts` file:
 ```typescript
 const supabaseUrl = 'https://bqkmykfooztuhvwwalcu.supabase.co';
-const supabaseAnonKey = 'REMOVED_SENSITIVE_DATA';
+const supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY_HERE';
 ```
 
 ### Fix 3: Run Database Setup Script

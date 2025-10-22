@@ -6,7 +6,7 @@ async function addMockMileageData() {
   
   // You'll need to replace these with your actual Supabase credentials
   const supabaseUrl = 'https://bqkmykfooztuhvwwalcu.supabase.co';
-  const supabaseKey = 'REMOVED_SENSITIVE_DATA';
+  const supabaseKey = 'process.env.SUPABASE_ANON_KEY || "YOUR_SUPABASE_ANON_KEY_HERE"';
   
   if (supabaseUrl === 'YOUR_SUPABASE_URL') {
     console.log('❌ Please update the Supabase credentials in this file first!');

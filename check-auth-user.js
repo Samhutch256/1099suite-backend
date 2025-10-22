@@ -3,7 +3,7 @@ const { createClient } = require('@supabase/supabase-js');
 
 // Supabase credentials from your config
 const SUPABASE_URL = 'https://bqkmykfooztuhvwwalcu.supabase.co';
-const SUPABASE_ANON_KEY = 'REMOVED_SENSITIVE_DATA';
+const SUPABASE_ANON_KEY = 'process.env.SUPABASE_ANON_KEY || "YOUR_SUPABASE_ANON_KEY_HERE"';
 
 async function checkAuthUser() {
   try {

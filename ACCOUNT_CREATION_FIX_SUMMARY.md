@@ -70,7 +70,7 @@
 Set these environment variables for production:
 ```bash
 EXPO_PUBLIC_SUPABASE_URL=https://bqkmykfooztuhvwwalcu.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=REMOVED_SENSITIVE_DATA
+EXPO_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY_HERE
 ```
 
 ## 🧪 TESTING

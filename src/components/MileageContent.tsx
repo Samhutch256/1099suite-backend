@@ -69,29 +69,29 @@ const TripCard: React.FC<TripCardProps> = ({ trip, onCategorize, onDelete, onVie
     <Animated.View
       entering={FadeInDown}
       exiting={FadeOutUp}
-      className="bg-white rounded-xl p-4 mb-4 shadow-sm border border-gray-200"
+      className="bg-[#111827] rounded-2xl p-4 mb-4 border border-gray-800 shadow-sm"
     >
       {/* Trip Header */}
       <View className="flex-row items-center justify-between mb-3">
         <View className="flex-row items-center">
           <View className={cn("w-3 h-3 rounded-full mr-2", getTripTypeColor(trip.tripType))} />
-          <Text className="text-sm font-medium text-gray-700">
+          <Text className="text-sm font-medium text-gray-200">
             {getTripTypeLabel(trip.tripType)}
           </Text>
           {trip.isAutoTracked && (
-            <View className="ml-2 bg-green-100 px-2 py-1 rounded-full">
-              <Text className="text-xs text-green-700">Auto</Text>
+            <View className="ml-2 bg-emerald-500/20 px-2 py-1 rounded-full border border-emerald-500/40">
+              <Text className="text-xs text-emerald-200">Auto</Text>
             </View>
           )}
         </View>
-        <Text className="text-lg font-bold text-gray-900">
+        <Text className="text-lg font-bold text-emerald-300">
           {formatCurrency(trip.value)}
         </Text>
       </View>
 
       {/* Trip Details */}
       <View className="mb-3">
-        <Text className="text-sm text-gray-600 mb-1">{trip.purpose}</Text>
+        <Text className="text-sm text-gray-300 mb-1">{trip.purpose}</Text>
         <Text className="text-xs text-gray-500">
           {formatDate(trip.startTime)} • {formatTime(trip.startTime)} - {formatTime(trip.endTime || trip.startTime)}
         </Text>
@@ -99,7 +99,7 @@ const TripCard: React.FC<TripCardProps> = ({ trip, onCategorize, onDelete, onVie
 
       {/* Distance and Rate */}
       <View className="flex-row justify-between items-center mb-3">
-        <Text className="text-sm text-gray-700">
+        <Text className="text-sm text-gray-300">
           {formatDistance(trip.distance)} miles
         </Text>
         <Text className="text-xs text-gray-500">
@@ -111,20 +111,20 @@ const TripCard: React.FC<TripCardProps> = ({ trip, onCategorize, onDelete, onVie
       {trip.startLocation && trip.endLocation && (
         <Pressable
           onPress={() => onViewMap(trip)}
-          className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3"
+          className="bg-blue-500/10 border border-blue-500/40 rounded-xl p-3 mb-3"
         >
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center">
-              <Ionicons name="map-outline" size={16} color="#3b82f6" />
-              <Text className="text-blue-700 font-medium ml-2">View Route</Text>
+              <Ionicons name="map-outline" size={16} color="#93c5fd" />
+              <Text className="text-blue-200 font-medium ml-2">View Route</Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color="#3b82f6" />
+            <Ionicons name="chevron-forward" size={16} color="#93c5fd" />
           </View>
         </Pressable>
       )}
 
       {/* Action Buttons */}
-      <View className="flex-row justify-between pt-3 border-t border-gray-200">
+      <View className="flex-row justify-between pt-3 border-t border-gray-800">
         <Pressable
           onPress={() => {
             const types: TripType[] = ['business', 'medical', 'charity', 'personal'];
@@ -134,8 +134,8 @@ const TripCard: React.FC<TripCardProps> = ({ trip, onCategorize, onDelete, onVie
           }}
           className="flex-row items-center"
         >
-          <Ionicons name="swap-horizontal-outline" size={16} color="#6b7280" />
-          <Text className="text-sm text-gray-600 ml-1">Reclassify</Text>
+          <Ionicons name="swap-horizontal-outline" size={16} color="#9ca3af" />
+          <Text className="text-sm text-gray-300 ml-1">Reclassify</Text>
         </Pressable>
         
         <Pressable
@@ -143,7 +143,7 @@ const TripCard: React.FC<TripCardProps> = ({ trip, onCategorize, onDelete, onVie
           className="flex-row items-center"
         >
           <Ionicons name="trash-outline" size={16} color="#ef4444" />
-          <Text className="text-sm text-red-500 ml-1">Delete</Text>
+          <Text className="text-sm text-red-400 ml-1">Delete</Text>
         </Pressable>
       </View>
     </Animated.View>
@@ -580,168 +580,177 @@ export const MileageContent: React.FC = () => {
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Summary Cards */}
-      <View className="px-6 py-4">
-        <View className="flex-row space-x-3 mb-4">
-          <View className="flex-1 bg-green-900/20 border border-green-500/30 rounded-xl p-3">
-            <Text className="text-green-300 text-sm">Total Miles</Text>
-            <Text className="text-white text-lg font-bold">{formatDistance(totalMileage)}</Text>
-          </View>
-          <View className="flex-1 bg-blue-900/20 border border-blue-500/30 rounded-xl p-3">
-            <Text className="text-blue-300 text-sm">Total Deduction</Text>
-            <Text className="text-white text-lg font-bold">{formatCurrency(totalDeduction)}</Text>
-          </View>
-        </View>
-
-        <View className="flex-row space-x-3">
-          <View className="flex-1 bg-purple-900/20 border border-purple-500/30 rounded-xl p-3">
-            <Text className="text-purple-300 text-sm">This Month</Text>
-            <Text className="text-white text-lg font-bold">{formatDistance(monthlyMileage)} mi</Text>
-          </View>
-          <View className="flex-1 bg-orange-900/20 border border-orange-500/30 rounded-xl p-3">
-            <Text className="text-orange-300 text-sm">Month Deduction</Text>
-            <Text className="text-white text-lg font-bold">{formatCurrency(monthlyDeduction)}</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Current Trip Status */}
-      {currentTrip && (
-        <View className="px-6 py-4 bg-blue-900/20 border-b border-blue-500/30">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center">
-              <Animated.View style={pulseStyle} className="w-3 h-3 bg-green-500 rounded-full mr-3" />
-              <View>
-                <Text className="text-blue-300 text-sm">Current Trip</Text>
-                <Text className="text-white font-semibold">{currentTrip.purpose}</Text>
-                <Text className="text-blue-200 text-sm">
-                  Started: {new Date(currentTrip.startTime).toLocaleTimeString()}
-                </Text>
-                <Text className="text-blue-200 text-xs mt-1">GPS tracking active</Text>
+      <View className="px-6 pt-4 space-y-4">
+        {currentTrip && (
+          <View className="bg-[#111827] border border-gray-800 rounded-2xl p-4">
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center">
+                <Animated.View style={pulseStyle} className="w-3 h-3 bg-emerald-400 rounded-full mr-3" />
+                <View>
+                  <Text className="text-gray-400 text-xs uppercase tracking-wider">Current Trip</Text>
+                  <Text className="text-white text-base font-semibold">{currentTrip.purpose}</Text>
+                  <Text className="text-gray-400 text-xs mt-1">
+                    Started {new Date(currentTrip.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                  </Text>
+                </View>
+              </View>
+              <View className="flex-row space-x-2">
+                <Pressable
+                  onPress={handleCancelTrip}
+                  className="px-3 py-2 bg-rose-500 rounded-xl"
+                >
+                  <Text className="text-white text-sm font-medium">Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleStopTrip}
+                  className="px-3 py-2 bg-emerald-500 rounded-xl"
+                >
+                  <Text className="text-white text-sm font-medium">Stop</Text>
+                </Pressable>
               </View>
             </View>
-            <View className="flex-row space-x-2">
-              <Pressable
-                onPress={handleCancelTrip}
-                className="bg-red-500 px-4 py-2 rounded-lg"
-              >
-                <Text className="text-white font-medium">Cancel</Text>
-              </Pressable>
-              <Pressable
-                onPress={handleStopTrip}
-                className="bg-green-500 px-4 py-2 rounded-lg"
-              >
-                <Text className="text-white font-medium">Stop</Text>
-              </Pressable>
-            </View>
           </View>
-        </View>
-      )}
+        )}
 
-      {/* Action Buttons */}
-      <View className="px-6 py-4">
-        <View className="flex-row space-x-3 mb-4">
+        <View className="flex-row space-x-3">
           <Pressable
             onPress={handleStartTrip}
             disabled={isTracking}
             className={cn(
-              "flex-1 flex-row items-center justify-center py-4 rounded-xl",
-              isTracking ? "bg-gray-500" : "bg-purple-500"
+              "flex-1 flex-row items-center justify-center py-3 rounded-2xl",
+              isTracking ? "bg-gray-600" : "bg-purple-500"
             )}
           >
-            <Ionicons name="play" size={20} color="white" />
+            <Ionicons name="play" size={18} color="white" />
             <Text className="text-white font-semibold ml-2">Start Trip</Text>
           </Pressable>
-          
+
           <Pressable
             onPress={() => setShowManualTripModal(true)}
-            className="flex-1 flex-row items-center justify-center py-4 bg-green-500 rounded-xl"
+            className="flex-1 flex-row items-center justify-center py-3 bg-emerald-500 rounded-2xl"
           >
-            <Ionicons name="add" size={20} color="white" />
+            <Ionicons name="add" size={18} color="white" />
             <Text className="text-white font-semibold ml-2">Add Manual</Text>
           </Pressable>
         </View>
 
         {navigation && (
-          <View className="space-y-3">
-            <Pressable
-              onPress={() => {
-                console.log('🚗 [MileageContent] Mileage Tracker button pressed');
-                navigation.navigate('Mileage' as never);
-              }}
-              className="flex-row items-center justify-center py-4 bg-green-500 rounded-xl"
-            >
-              <Ionicons name="car" size={20} color="white" />
-              <Text className="text-white font-semibold ml-2">Mileage Tracker</Text>
-            </Pressable>
-            
+          <View className="flex-row space-x-3">
             <Pressable
               onPress={() => navigation.navigate('Mileage' as never)}
-              className="flex-row items-center justify-center py-4 bg-blue-500 rounded-xl"
+              className="flex-1 flex-row items-center justify-center py-3 bg-[#141c2c] border border-gray-800 rounded-2xl"
             >
-              <Ionicons name="list" size={20} color="white" />
-              <Text className="text-white font-semibold ml-2">View Logged</Text>
+              <Ionicons name="car" size={18} color="#a5b4fc" />
+              <Text className="text-indigo-200 font-semibold ml-2">Mileage Tracker</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => navigation.navigate('Mileage' as never)}
+              className="flex-1 flex-row items-center justify-center py-3 bg-[#141c2c] border border-gray-800 rounded-2xl"
+            >
+              <Ionicons name="list" size={18} color="#93c5fd" />
+              <Text className="text-sky-200 font-semibold ml-2">View Logged</Text>
             </Pressable>
           </View>
         )}
       </View>
 
-      {/* Auto-Tracking Toggle */}
-      <View className="px-6 py-4 bg-gray-800/20 border-b border-gray-600">
-        <View className="flex-row items-center justify-between">
-          <View className="flex-1">
-            <Text className="text-white font-medium">Auto-Track Trips</Text>
-            <Text className="text-gray-400 text-sm">
-              Automatically detect and log trips in background
-            </Text>
-            {backgroundTrackingStatus === 'checking' && (
-              <Text className="text-blue-400 text-xs mt-1">Checking permissions...</Text>
-            )}
-            {backgroundTrackingStatus === 'unavailable' && (
-              <Text className="text-red-400 text-xs mt-1">Background location access required</Text>
-            )}
-            {backgroundTrackingStatus === 'available' && autoTrackingEnabled && (
-              <Text className="text-green-400 text-xs mt-1">Active - tracking in background</Text>
-            )}
+      <View className="px-6 space-y-4 pb-4">
+        <View className="bg-[#111827] border border-gray-800 rounded-2xl p-4">
+          <View className="flex-row items-center justify-between">
+            <View className="flex-1 pr-3">
+              <Text className="text-white font-medium">Auto-Track Trips</Text>
+              <Text className="text-gray-400 text-xs mt-1">
+                Automatically detect and log trips in the background
+              </Text>
+              {backgroundTrackingStatus === 'checking' && (
+                <Text className="text-indigo-300 text-xs mt-2">Checking permissions...</Text>
+              )}
+              {backgroundTrackingStatus === 'unavailable' && (
+                <Text className="text-red-300 text-xs mt-2">
+                  Background location access required
+                </Text>
+              )}
+              {backgroundTrackingStatus === 'available' && autoTrackingEnabled && (
+                <Text className="text-emerald-300 text-xs mt-2">Active in background</Text>
+              )}
+            </View>
+            <Switch
+              value={autoTrackingEnabled}
+              onValueChange={handleAutoTrackingToggle}
+              trackColor={{ false: '#1f2937', true: '#4338ca' }}
+              thumbColor="#ffffff"
+              disabled={backgroundTrackingStatus === 'checking'}
+            />
           </View>
-          <Switch
-            value={autoTrackingEnabled}
-            onValueChange={handleAutoTrackingToggle}
-            trackColor={{ false: '#4b5563', true: '#3b82f6' }}
-            thumbColor={autoTrackingEnabled ? '#ffffff' : '#ffffff'}
-            disabled={backgroundTrackingStatus === 'checking'}
-          />
+        </View>
+
+        {latestTrip && (
+          <View className="bg-[#111827] border border-gray-800 rounded-2xl p-4">
+            <View className="flex-row items-center justify-between mb-3">
+              <Text className="text-white font-semibold capitalize">{latestTrip.tripType} Trip</Text>
+              <Text className="text-emerald-300 font-semibold">
+                {formatCurrency(latestTrip.value)}
+              </Text>
+            </View>
+            <Text className="text-gray-400 text-xs mb-2">
+              {new Date(latestTrip.startTime).toLocaleDateString()} •{' '}
+              {new Date(latestTrip.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+            </Text>
+            <Text className="text-gray-300 text-sm mb-3">
+              {formatDistance(latestTrip.distance)} miles • ${latestTrip.irsRate.toFixed(2)}/mi
+            </Text>
+            <View className="flex-row items-center justify-between">
+              <Text className="text-gray-400 text-xs">{latestTrip.purpose}</Text>
+              <Pressable
+                onPress={() => handleViewMap(latestTrip)}
+                className="px-3 py-1 bg-purple-600/30 border border-purple-500/40 rounded-full"
+              >
+                <Text className="text-purple-200 text-xs font-medium">View</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        <View className="bg-[#111827] border border-gray-800 rounded-2xl p-4">
+          <View className="flex-row items-center mb-3">
+            <Ionicons name="information-circle" size={16} color="#a5b4fc" />
+            <Text className="text-indigo-200 font-semibold ml-2">IRS deduction rates</Text>
+          </View>
+          <View className="space-y-2">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-gray-300 text-sm">Business</Text>
+              <Text className="text-purple-200 text-sm">${IRS_RATES.business}/mi</Text>
+            </View>
+            <View className="flex-row items-center justify-between">
+              <Text className="text-gray-300 text-sm">Medical</Text>
+              <Text className="text-purple-200 text-sm">${IRS_RATES.medical}/mi</Text>
+            </View>
+            <View className="flex-row items-center justify-between">
+              <Text className="text-gray-300 text-sm">Charity</Text>
+              <Text className="text-purple-200 text-sm">${IRS_RATES.charity}/mi</Text>
+            </View>
+            <View className="flex-row items-center justify-between">
+              <Text className="text-gray-300 text-sm">Personal</Text>
+              <Text className="text-purple-200 text-sm">${IRS_RATES.personal}/mi</Text>
+            </View>
+          </View>
         </View>
       </View>
 
-      {/* IRS Rates Info */}
-      <View className="px-6 py-4 bg-blue-900/10 border-b border-blue-500/20">
-        <View className="flex-row items-center mb-2">
-          <Ionicons name="information-circle" size={16} color="#3b82f6" />
-          <Text className="text-blue-300 font-medium ml-2">IRS Deduction Rates</Text>
-        </View>
-        <View className="space-y-1">
-          <Text className="text-blue-200 text-xs">Business: ${IRS_RATES.business}/mile</Text>
-          <Text className="text-blue-200 text-xs">Medical: ${IRS_RATES.medical}/mile</Text>
-          <Text className="text-blue-200 text-xs">Charity: ${IRS_RATES.charity}/mile</Text>
-          <Text className="text-blue-200 text-xs">Personal: ${IRS_RATES.personal}/mile (no deduction)</Text>
-        </View>
-      </View>
-
-      {/* Trip List */}
       <View className="px-6" style={{ flex: 1 }}>
         {sortedTrips.length === 0 ? (
           <View className="items-center justify-center py-12">
-            <Ionicons name="car-outline" size={48} color="#9ca3af" />
+            <Ionicons name="car-outline" size={48} color="#6b7280" />
             <Text className="text-gray-300 text-lg mt-4">No trips recorded</Text>
-            <Text className="text-gray-400 text-center mt-2">
+            <Text className="text-gray-500 text-center mt-2">
               Start your first trip to begin tracking mileage
             </Text>
           </View>
         ) : (
           <>
-            <Text className="text-gray-300 text-sm mb-4">
-              {sortedTrips.length} trip{sortedTrips.length !== 1 ? 's' : ''} • Most recent first
+            <Text className="text-gray-400 text-xs uppercase tracking-widest mb-4">
+              Recent Trips
             </Text>
             {sortedTrips.map((trip, index) => (
               <TripCard

@@ -4,7 +4,7 @@ const { createClient } = require('@supabase/supabase-js');
 async function quickTest() {
   const supabase = createClient(
     'https://bqkmykfooztuhvwwalcu.supabase.co',
-    'REMOVED_SENSITIVE_DATA'
+    'process.env.SUPABASE_ANON_KEY || "YOUR_SUPABASE_ANON_KEY_HERE"'
   );
   
   try {
