@@ -361,7 +361,6 @@ export const MileageContent: React.FC = () => {
     trips,
     currentTrip,
     isTracking,
-    currentIrsRate,
     autoTrackingEnabled,
     startTrip,
     stopTrip,
