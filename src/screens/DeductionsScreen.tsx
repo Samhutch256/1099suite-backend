@@ -3,14 +3,20 @@ import { View, Text, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useAuthStore } from '../state/authStore';
 import { cn } from '../utils/cn';
 import { ExpensesContent } from '../components/ExpensesContent';
 import { MileageContent } from '../components/MileageContent';
 import { BankManagementModal } from '../components/BankManagementModal';
+import { RootStackParamList } from '../navigation/AppNavigator';
 
 type DeductionTab = 'expenses' | 'mileage';
 
 export const DeductionsScreen: React.FC = () => {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<DeductionTab>('expenses');
   const [showBankSettings, setShowBankSettings] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -41,6 +47,16 @@ export const DeductionsScreen: React.FC = () => {
     setActiveTab(tabId);
   };
 
+  const getInitials = (name: string | undefined): string => {
+    if (!name) return 'U';
+    return name
+      .split(' ')
+      .map(word => word.charAt(0))
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
   return (
     <LinearGradient colors={['#1a1f2e', '#2d3748', '#4a5568']} style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1 }}>
@@ -48,12 +64,26 @@ export const DeductionsScreen: React.FC = () => {
         <View className="px-6 py-4 border-b border-gray-600 bg-transparent">
           <View className="flex-row items-center justify-between mb-4">
             <Text className="text-2xl font-bold text-white">Deductions</Text>
-            <Pressable
-              onPress={() => setShowBankSettings(true)}
-              className="w-10 h-10 bg-gray-700/50 rounded-full items-center justify-center"
-            >
-              <Ionicons name="settings" size={20} color="#9ca3af" />
-            </Pressable>
+            <View className="flex-row items-center space-x-3">
+              <Pressable
+                onPress={() => setShowBankSettings(true)}
+                className="w-10 h-10 bg-gray-700/50 rounded-full items-center justify-center"
+              >
+                <Ionicons name="settings" size={20} color="#9ca3af" />
+              </Pressable>
+              <Pressable
+                onPress={() => navigation.navigate('Profile')}
+                className="w-10 h-10 bg-white rounded-full items-center justify-center shadow-sm border border-gray-100 mr-2"
+              >
+                {user?.photoURL ? (
+                  <View className="w-10 h-10 rounded-full bg-gray-200" />
+                ) : (
+                  <Text className="text-blue-500 font-semibold text-sm">
+                    {user ? getInitials(user.name) : 'U'}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
           </View>
           
           <View className="flex-row bg-gray-800/50 rounded-xl p-1">
